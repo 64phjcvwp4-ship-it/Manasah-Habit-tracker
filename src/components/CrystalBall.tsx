@@ -263,7 +263,7 @@ export function CrystalBall({
           padding: 5px;
           border-radius: 6px;
         }
-        .chat-head button:hover { color: var(--text); background: var(--surface-hover); }
+        .chat-head button:hover { color: var(--text); background: rgba(255,255,255,0.06); }
         .chat-body {
           flex: 1;
           overflow-y: auto;
@@ -279,22 +279,21 @@ export function CrystalBall({
           font-size: 0.9rem;
           line-height: 1.48;
           white-space: pre-wrap;
-          color: var(--text);
         }
         .bubble.user {
           align-self: flex-end;
-          background: color-mix(in srgb, var(--accent) 20%, transparent);
-          border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+          background: rgba(167, 139, 250, 0.22);
+          border: 1px solid rgba(167, 139, 250, 0.35);
         }
         .bubble.ai {
           align-self: flex-start;
-          background: var(--surface-subtle);
+          background: rgba(255, 255, 255, 0.06);
           border: 1px solid var(--border);
         }
         .bubble.ai.error {
-          background: var(--danger-bg);
-          border-color: var(--danger-border);
-          color: var(--danger-ink);
+          background: rgba(248, 113, 113, 0.14);
+          border-color: rgba(248, 113, 113, 0.35);
+          color: #fecaca;
         }
         .bubble.typing {
           display: flex;
@@ -323,15 +322,15 @@ export function CrystalBall({
         .quick-prompt-btn {
           padding: 0.28rem 0.6rem;
           border-radius: 8px;
-          background: color-mix(in srgb, var(--accent) 12%, transparent);
-          border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+          background: rgba(167, 139, 250, 0.12);
+          border: 1px solid rgba(167, 139, 250, 0.25);
           color: var(--accent-2);
           font-size: 0.75rem;
           font-weight: 500;
           transition: background 0.18s;
         }
         .quick-prompt-btn:hover:not(:disabled) {
-          background: color-mix(in srgb, var(--accent) 22%, transparent);
+          background: rgba(167, 139, 250, 0.22);
         }
         .chat-input {
           display: flex;
@@ -341,7 +340,7 @@ export function CrystalBall({
         }
         .chat-input input {
           flex: 1;
-          background: var(--surface-input);
+          background: rgba(0, 0, 0, 0.35);
           border: 1px solid var(--border);
           border-radius: 12px;
           padding: 0.65rem 1rem;
@@ -354,14 +353,14 @@ export function CrystalBall({
           opacity: 0.75;
         }
         .chat-input input:focus {
-          border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+          border-color: rgba(167, 139, 250, 0.5);
         }
         .chat-input button {
           width: 42px;
           height: 42px;
           border-radius: 12px;
           background: var(--accent);
-          color: var(--accent-contrast);
+          color: #0a0014;
           display: grid;
           place-items: center;
           transition: opacity 0.2s;

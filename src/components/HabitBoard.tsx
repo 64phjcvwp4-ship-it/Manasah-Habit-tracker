@@ -16,10 +16,8 @@ import {
   X,
 } from 'lucide-react'
 import { VALIDATION_LIMITS } from '../firebase'
-import { useTheme } from '../contexts/ThemeContext'
 import {
   formatReminderTime,
-  getCategoryMeta,
   HABIT_CATEGORIES,
   HABIT_PALETTE,
   type Habit,
@@ -50,7 +48,6 @@ export function HabitBoard({
   ) => void
   onDelete?: (id: string) => void
 }) {
-  const { theme } = useTheme()
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
   const [selectedTag, setSelectedTag] = useState<string>('All')
   const [searchQuery, setSearchQuery] = useState<string>('')
@@ -69,55 +66,30 @@ export function HabitBoard({
     reminderTime: string
   }>({ name: '', category: 'Focus', color: HABIT_PALETTE[0], reminderTime: '' })
 
-  const categorySummaries = useMemo(() => {
-    const map = new Map<HabitCategory, { total: number; done: number }>()
-    for (const cat of HABIT_CATEGORIES) {
-      map.set(cat, { total: 0, done: 0 })
-    }
-    for (const h of habits) {
-      const cat: HabitCategory = HABIT_CATEGORIES.includes(h.category) ? h.category : 'Other'
-      const entry = map.get(cat)!
-      entry.total += 1
-      if (h.completedToday) entry.done += 1
-    }
-    return HABIT_CATEGORIES.map(cat => ({
-      meta: getCategoryMeta(cat),
-      total: map.get(cat)!.total,
-      done: map.get(cat)!.done,
-    }))
+  const categories = useMemo(() => {
+    const present = new Set(habits.map(h => h.category || 'Other'))
+    return ['All', ...HABIT_CATEGORIES.filter(c => present.has(c))]
   }, [habits])
 
   const availableTags = useMemo(() => {
-    const counts = new Map<string, { label: string; count: number; color: string; ink: string }>()
+    const counts = new Map<string, { label: string; count: number }>()
     for (const h of habits) {
-      const catMeta = getCategoryMeta(h.category)
-      const ink = theme === 'light' ? catMeta.lightInk : catMeta.darkInk
       for (const tag of h.tags ?? []) {
         const key = tag.toLowerCase()
         const existing = counts.get(key)
         if (existing) {
           existing.count += 1
         } else {
-          counts.set(key, { label: tag, count: 1, color: catMeta.color, ink })
+          counts.set(key, { label: tag, count: 1 })
         }
       }
     }
     return Array.from(counts.entries())
-      .map(([key, val]) => ({
-        key,
-        label: val.label,
-        count: val.count,
-        color: val.color,
-        ink: val.ink,
-      }))
+      .map(([key, val]) => ({ key, label: val.label, count: val.count }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
-  }, [habits, theme])
+  }, [habits])
 
-  const activeFilter =
-    selectedCategory === 'All' || HABIT_CATEGORIES.includes(selectedCategory as HabitCategory)
-      ? selectedCategory
-      : 'All'
-
+  const activeFilter = categories.includes(selectedCategory) ? selectedCategory : 'All'
   const activeTagFilter =
     selectedTag === 'All' || availableTags.some(t => t.key === selectedTag.toLowerCase())
       ? selectedTag
@@ -216,21 +188,12 @@ export function HabitBoard({
     const showAllNotes = Boolean(expandedNotes[h.id])
     const visibleNotes = showAllNotes ? h.notes : h.notes.slice(-2)
     const hiddenCount = h.notes.length - visibleNotes.length
-    const catMeta = getCategoryMeta(h.category)
-    const catInk = theme === 'light' ? catMeta.lightInk : catMeta.darkInk
-    const isCategoryFiltered = activeFilter === catMeta.name
 
     return (
       <div
         key={h.id}
         className={`habit-card ${h.completedToday ? 'done' : ''} ${h.frozenToday ? 'frozen' : ''}`}
-        style={
-          {
-            '--accent': h.color,
-            '--cat-color': catMeta.color,
-            '--cat-ink': catInk,
-          } as React.CSSProperties
-        }
+        style={{ '--accent': h.color } as React.CSSProperties}
       >
         {isEditing ? (
           <form className="habit-edit-panel" onSubmit={e => handleEditSubmit(e, h.id)}>
@@ -321,52 +284,31 @@ export function HabitBoard({
             </div>
           </form>
         ) : (
-          <div className="habit-main-wrap">
-            <div className="habit-card-top-bar">
-              <button
-                type="button"
-                className={`habit-category-tag ${isCategoryFiltered ? 'active' : ''}`}
-                onClick={() => setSelectedCategory(isCategoryFiltered ? 'All' : catMeta.name)}
-                title={
-                  isCategoryFiltered
-                    ? `Clear ${catMeta.name} filter`
-                    : `Filter by ${catMeta.name}`
-                }
-              >
-                <span className="cat-swatch" aria-hidden="true" />
-                <span>{catMeta.name}</span>
-              </button>
-
-              <button
-                type="button"
-                className={`check ${h.completedToday ? 'on' : ''}`}
-                onClick={() => onToggle(h.id)}
-                aria-pressed={h.completedToday}
-                aria-label={
-                  h.completedToday ? `Mark ${h.name} incomplete` : `Mark ${h.name} done today`
-                }
-              >
+          <button
+            type="button"
+            className="habit-main"
+            onClick={() => onToggle(h.id)}
+            aria-pressed={h.completedToday}
+          >
+            <div className="habit-top">
+              <div className="habit-title-wrap">
+                <span className="habit-category">{h.category || 'Other'}</span>
+                <span className="habit-name">{h.name}</span>
+              </div>
+              <span className={`check ${h.completedToday ? 'on' : ''}`}>
                 <Check size={16} strokeWidth={3} />
-              </button>
+              </span>
             </div>
 
-            <button
-              type="button"
-              className="habit-main"
-              onClick={() => onToggle(h.id)}
-              aria-pressed={h.completedToday}
-            >
-              <span className="habit-name">{h.name}</span>
-              <div className="habit-meta">
-                <span className="streak">{h.streak} day streak</span>
-                <div className="dots" aria-label="Last 7 days">
-                  {h.history.map((d, i) => (
-                    <span key={i} className={`dot ${d ? 'filled' : ''}`} />
-                  ))}
-                </div>
+            <div className="habit-meta">
+              <span className="streak">{h.streak} day streak</span>
+              <div className="dots" aria-label="Last 7 days">
+                {h.history.map((d, i) => (
+                  <span key={i} className={`dot ${d ? 'filled' : ''}`} />
+                ))}
               </div>
-            </button>
-          </div>
+            </div>
+          </button>
         )}
 
         <div className="habit-freeze-row">
@@ -610,98 +552,28 @@ export function HabitBoard({
 
   return (
     <div className="habit-board">
-      {/* Color-coded Habit Categories Directory & Filter */}
-      <div className="categories-directory glass" aria-label="Habit categories">
-        <div className="categories-dir-header">
-          <span className="categories-dir-title">Categories</span>
-          <span className="categories-dir-hint">
-            {activeFilter === 'All'
-              ? `${HABIT_CATEGORIES.length} categories · click any tag to filter`
-              : `Filtering by ${activeFilter}`}
-          </span>
-        </div>
-
+      <div className="board-controls">
         <div className="category-tabs" role="tablist" aria-label="Filter habits by category">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeFilter === 'All'}
-            className={`cat-tab all-tab ${activeFilter === 'All' ? 'active' : ''}`}
-            onClick={() => setSelectedCategory('All')}
-          >
-            <span>All</span>
-            <span className="cat-count">{habits.length}</span>
-          </button>
-
-          {categorySummaries.map(({ meta, total, done }) => {
-            const isSelected = activeFilter === meta.name
-            const ink = theme === 'light' ? meta.lightInk : meta.darkInk
+          {categories.map(cat => {
+            const count =
+              cat === 'All'
+                ? habits.length
+                : habits.filter(h => (h.category || 'Other') === cat).length
             return (
               <button
-                key={meta.name}
+                key={cat}
                 type="button"
                 role="tab"
-                aria-selected={isSelected}
-                className={`cat-tab color-coded ${isSelected ? 'active' : ''} ${total === 0 ? 'empty' : ''}`}
-                style={
-                  {
-                    '--cat-color': meta.color,
-                    '--cat-ink': ink,
-                  } as React.CSSProperties
-                }
-                onClick={() => setSelectedCategory(isSelected ? 'All' : meta.name)}
-                title={`${meta.description} (${done}/${total} done today)`}
+                aria-selected={activeFilter === cat}
+                className={`cat-tab ${activeFilter === cat ? 'active' : ''}`}
+                onClick={() => setSelectedCategory(cat)}
               >
-                <span className="cat-swatch" aria-hidden="true" />
-                <span>{meta.name}</span>
-                <span className="cat-count">{total > 0 ? `${done}/${total}` : '0'}</span>
+                <span>{cat}</span>
+                <span className="cat-count">{count}</span>
               </button>
             )
           })}
         </div>
-      </div>
-
-      <div className="board-controls">
-        {availableTags.length > 0 ? (
-          <div className="tag-filter-bar" role="group" aria-label="Filter habits by tag">
-            <span className="tag-filter-heading">
-              <Tag size={13} />
-              <span>Tags</span>
-            </span>
-            <div className="tag-filter-tabs">
-              <button
-                type="button"
-                className={`tag-filter-btn ${activeTagFilter === 'All' ? 'active' : ''}`}
-                aria-pressed={activeTagFilter === 'All'}
-                onClick={() => setSelectedTag('All')}
-              >
-                All tags
-              </button>
-              {availableTags.map(t => {
-                const isSelected = activeTagFilter.toLowerCase() === t.key
-                return (
-                  <button
-                    key={t.key}
-                    type="button"
-                    className={`tag-filter-btn color-tinted ${isSelected ? 'active' : ''}`}
-                    style={
-                      {
-                        '--tag-color': t.color,
-                        '--tag-ink': t.ink,
-                      } as React.CSSProperties
-                    }
-                    aria-pressed={isSelected}
-                    onClick={() => setSelectedTag(isSelected ? 'All' : t.label)}
-                  >
-                    #{t.label} <span className="cat-count">{t.count}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        ) : (
-          <div />
-        )}
 
         <div className="board-right-controls">
           <div className="board-search">
@@ -738,6 +610,39 @@ export function HabitBoard({
         </div>
       </div>
 
+      {availableTags.length > 0 && (
+        <div className="tag-filter-bar" role="group" aria-label="Filter habits by tag">
+          <span className="tag-filter-heading">
+            <Tag size={13} />
+            <span>Tags</span>
+          </span>
+          <div className="tag-filter-tabs">
+            <button
+              type="button"
+              className={`tag-filter-btn ${activeTagFilter === 'All' ? 'active' : ''}`}
+              aria-pressed={activeTagFilter === 'All'}
+              onClick={() => setSelectedTag('All')}
+            >
+              All tags
+            </button>
+            {availableTags.map(t => {
+              const isSelected = activeTagFilter.toLowerCase() === t.key
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  className={`tag-filter-btn ${isSelected ? 'active' : ''}`}
+                  aria-pressed={isSelected}
+                  onClick={() => setSelectedTag(isSelected ? 'All' : t.label)}
+                >
+                  #{t.label} <span className="cat-count">{t.count}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {filteredHabits.length === 0 ? (
         <div className="empty-state">
           <p>No habits match the current filters.</p>
@@ -759,24 +664,10 @@ export function HabitBoard({
         <div className="habit-groups">
           {groupedHabits.map(([category, items]) => {
             const doneCount = items.filter(i => i.completedToday).length
-            const meta = getCategoryMeta(category)
-            const ink = theme === 'light' ? meta.lightInk : meta.darkInk
             return (
-              <div
-                key={category}
-                className="habit-group"
-                style={
-                  {
-                    '--cat-color': meta.color,
-                    '--cat-ink': ink,
-                  } as React.CSSProperties
-                }
-              >
+              <div key={category} className="habit-group">
                 <div className="group-header">
-                  <div className="group-title-wrap">
-                    <span className="cat-swatch" aria-hidden="true" />
-                    <h3>{category}</h3>
-                  </div>
+                  <h3>{category}</h3>
                   <span>
                     {doneCount}/{items.length} done
                   </span>
@@ -796,94 +687,6 @@ export function HabitBoard({
           flex-direction: column;
           gap: 1.15rem;
         }
-        .categories-directory {
-          padding: 0.85rem 1rem;
-          border-radius: 16px;
-          display: flex;
-          flex-direction: column;
-          gap: 0.65rem;
-        }
-        .categories-dir-header {
-          display: flex;
-          align-items: baseline;
-          justify-content: space-between;
-          gap: 0.75rem;
-          flex-wrap: wrap;
-        }
-        .categories-dir-title {
-          font-family: 'Space Grotesk', sans-serif;
-          font-size: 0.86rem;
-          font-weight: 600;
-          color: var(--text);
-        }
-        .categories-dir-hint {
-          font-size: 0.76rem;
-          color: var(--muted);
-        }
-        .category-tabs {
-          display: flex;
-          align-items: center;
-          gap: 0.45rem;
-          flex-wrap: wrap;
-        }
-        .cat-swatch {
-          width: 8px;
-          height: 8px;
-          border-radius: 3px;
-          background: var(--cat-color);
-          flex-shrink: 0;
-        }
-        .cat-tab {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.42rem;
-          padding: 0.42rem 0.78rem;
-          border-radius: 10px;
-          background: var(--surface-subtle);
-          border: 1px solid var(--border);
-          color: var(--muted);
-          font-size: 0.81rem;
-          font-weight: 500;
-          white-space: nowrap;
-          transition: color 0.18s, border-color 0.18s, background 0.18s;
-        }
-        .cat-tab.color-coded {
-          background: color-mix(in srgb, var(--cat-color) 10%, transparent);
-          border-color: color-mix(in srgb, var(--cat-color) 28%, transparent);
-          color: var(--cat-ink);
-        }
-        .cat-tab.color-coded.empty {
-          opacity: 0.72;
-        }
-        .cat-tab:hover {
-          color: var(--text);
-          border-color: color-mix(in srgb, var(--accent) 42%, transparent);
-        }
-        .cat-tab.color-coded:hover {
-          opacity: 1;
-          color: var(--cat-ink);
-          background: color-mix(in srgb, var(--cat-color) 18%, transparent);
-          border-color: color-mix(in srgb, var(--cat-color) 52%, transparent);
-        }
-        .cat-tab.all-tab.active {
-          color: var(--text);
-          background: color-mix(in srgb, var(--accent) 18%, transparent);
-          border-color: color-mix(in srgb, var(--accent) 48%, transparent);
-          font-weight: 600;
-        }
-        .cat-tab.color-coded.active {
-          opacity: 1;
-          color: var(--cat-ink);
-          background: color-mix(in srgb, var(--cat-color) 24%, transparent);
-          border-color: var(--cat-color);
-          font-weight: 600;
-          box-shadow: 0 0 0 1px color-mix(in srgb, var(--cat-color) 32%, transparent);
-        }
-        .cat-count {
-          font-size: 0.72rem;
-          opacity: 0.82;
-          font-variant-numeric: tabular-nums;
-        }
         .board-controls {
           display: flex;
           align-items: center;
@@ -901,15 +704,15 @@ export function HabitBoard({
           position: relative;
           display: flex;
           align-items: center;
-          background: var(--surface-card);
-          border: 1px solid var(--border);
+          background: rgba(18, 15, 28, 0.72);
+          border: 1px solid rgba(255, 255, 255, 0.08);
           border-radius: 10px;
           padding: 0 0.55rem;
           height: 36px;
           min-width: 185px;
         }
         .board-search:focus-within {
-          border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+          border-color: rgba(167, 139, 250, 0.5);
         }
         .search-icon {
           color: var(--muted);
@@ -936,14 +739,48 @@ export function HabitBoard({
           place-items: center;
           padding: 2px;
         }
+        .category-tabs {
+          display: flex;
+          align-items: center;
+          gap: 0.45rem;
+          flex-wrap: wrap;
+        }
+        .cat-tab {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.4rem;
+          padding: 0.4rem 0.8rem;
+          border-radius: 10px;
+          background: rgba(18, 15, 28, 0.72);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: var(--muted);
+          font-size: 0.82rem;
+          font-weight: 500;
+          white-space: nowrap;
+          transition: color 0.18s, border-color 0.18s, background 0.18s;
+        }
+        .cat-tab:hover {
+          color: var(--text);
+          border-color: rgba(167, 139, 250, 0.4);
+        }
+        .cat-tab.active {
+          color: var(--text);
+          background: rgba(167, 139, 250, 0.18);
+          border-color: rgba(167, 139, 250, 0.48);
+        }
+        .cat-count {
+          font-size: 0.72rem;
+          opacity: 0.75;
+          font-variant-numeric: tabular-nums;
+        }
         .group-toggle {
           display: inline-flex;
           align-items: center;
           gap: 0.4rem;
           padding: 0.42rem 0.85rem;
           border-radius: 10px;
-          background: var(--surface-card);
-          border: 1px solid var(--border);
+          background: rgba(18, 15, 28, 0.72);
+          border: 1px solid rgba(255, 255, 255, 0.08);
           color: var(--muted);
           font-size: 0.82rem;
           font-weight: 500;
@@ -954,8 +791,8 @@ export function HabitBoard({
         .group-toggle:hover,
         .group-toggle.active {
           color: var(--text);
-          background: color-mix(in srgb, var(--accent) 16%, transparent);
-          border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+          background: rgba(167, 139, 250, 0.18);
+          border-color: rgba(167, 139, 250, 0.45);
         }
         .habit-groups {
           display: flex;
@@ -973,19 +810,14 @@ export function HabitBoard({
           justify-content: space-between;
           gap: 0.75rem;
           padding-bottom: 0.45rem;
-          border-bottom: 1px solid color-mix(in srgb, var(--cat-color) 32%, var(--border));
-        }
-        .group-title-wrap {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         }
         .group-header h3 {
           font-size: 1rem;
           font-weight: 600;
-          color: var(--cat-ink);
+          color: var(--accent-2);
         }
-        .group-header span:last-child {
+        .group-header span {
           font-size: 0.78rem;
           color: var(--muted);
           font-variant-numeric: tabular-nums;
@@ -999,64 +831,33 @@ export function HabitBoard({
           display: flex;
           flex-direction: column;
           border-radius: 18px;
-          background: var(--surface-card);
-          border: 1px solid var(--border);
+          background: rgba(18, 15, 28, 0.72);
+          border: 1px solid rgba(255, 255, 255, 0.08);
           backdrop-filter: blur(12px);
           transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
           color: inherit;
           overflow: hidden;
         }
         .habit-card:hover {
-          border-color: color-mix(in srgb, var(--accent) 48%, transparent);
+          border-color: color-mix(in srgb, var(--accent) 50%, transparent);
           transform: translateY(-2px);
-          box-shadow: var(--shadow-card);
         }
         .habit-card.done {
-          border-color: color-mix(in srgb, var(--accent) 58%, transparent);
-          box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+          border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+          box-shadow: 0 0 28px color-mix(in srgb, var(--accent) 18%, transparent);
         }
         .habit-card.frozen {
-          border-color: var(--freeze-border);
-          box-shadow: 0 0 0 1px color-mix(in srgb, var(--freeze-ink) 20%, transparent);
-        }
-        .habit-main-wrap {
-          display: flex;
-          flex-direction: column;
-        }
-        .habit-card-top-bar {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 0.65rem;
-          padding: 1rem 1.25rem 0;
-        }
-        .habit-category-tag {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.38rem;
-          padding: 0.22rem 0.56rem;
-          border-radius: 7px;
-          background: color-mix(in srgb, var(--cat-color) 13%, transparent);
-          border: 1px solid color-mix(in srgb, var(--cat-color) 32%, transparent);
-          color: var(--cat-ink);
-          font-size: 0.72rem;
-          font-weight: 600;
-          white-space: nowrap;
-          transition: background 0.18s, border-color 0.18s;
-        }
-        .habit-category-tag:hover,
-        .habit-category-tag.active {
-          background: color-mix(in srgb, var(--cat-color) 24%, transparent);
-          border-color: var(--cat-color);
+          border-color: rgba(56, 189, 248, 0.5);
+          box-shadow: 0 0 24px rgba(56, 189, 248, 0.14);
         }
         .habit-main {
           width: 100%;
           text-align: left;
-          padding: 0.55rem 1.25rem 0.9rem;
+          padding: 1.25rem 1.25rem 0.9rem;
           color: inherit;
           display: flex;
           flex-direction: column;
-          gap: 0.65rem;
+          gap: 0.9rem;
         }
         .habit-edit-panel {
           display: flex;
@@ -1078,8 +879,8 @@ export function HabitBoard({
         }
         .habit-edit-panel input,
         .habit-edit-panel select {
-          background: var(--surface-input);
-          border: 1px solid var(--border-strong);
+          background: rgba(0, 0, 0, 0.35);
+          border: 1px solid rgba(255, 255, 255, 0.12);
           border-radius: 8px;
           padding: 0.42rem 0.65rem;
           color: var(--text);
@@ -1087,7 +888,7 @@ export function HabitBoard({
           outline: none;
         }
         .habit-edit-panel select {
-          background: var(--surface-solid);
+          background: rgba(12, 8, 22, 0.95);
         }
         .edit-color-row {
           display: flex;
@@ -1102,7 +903,7 @@ export function HabitBoard({
           transition: transform 0.15s, border-color 0.15s;
         }
         .color-swatch.selected {
-          border-color: var(--text);
+          border-color: #ffffff;
           transform: scale(1.1);
         }
         .edit-actions {
@@ -1114,7 +915,7 @@ export function HabitBoard({
         .edit-cancel-btn {
           padding: 0.35rem 0.7rem;
           border-radius: 8px;
-          background: var(--surface-subtle);
+          background: rgba(255, 255, 255, 0.06);
           color: var(--muted);
           font-size: 0.78rem;
           font-weight: 500;
@@ -1123,34 +924,49 @@ export function HabitBoard({
           padding: 0.35rem 0.75rem;
           border-radius: 8px;
           background: var(--accent);
-          color: var(--accent-contrast);
+          color: #0a0014;
           font-size: 0.78rem;
           font-weight: 600;
         }
+        .habit-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 0.75rem;
+        }
+        .habit-title-wrap {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+          min-width: 0;
+        }
+        .habit-category {
+          font-size: 0.68rem;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--muted);
+          opacity: 0.85;
+        }
         .habit-name {
           font-weight: 600;
-          font-size: 1.04rem;
+          font-size: 1.02rem;
           line-height: 1.3;
-          color: var(--text);
         }
         .check {
           width: 28px;
           height: 28px;
           border-radius: 50%;
-          border: 2px solid var(--border-strong);
+          border: 2px solid rgba(255, 255, 255, 0.2);
           display: grid;
           place-items: center;
           color: transparent;
           transition: all 0.2s;
           flex-shrink: 0;
         }
-        .check:hover {
-          border-color: var(--accent);
-        }
         .check.on {
           background: var(--accent);
           border-color: var(--accent);
-          color: var(--accent-contrast);
+          color: #0a0014;
         }
         .habit-meta {
           display: flex;
@@ -1171,7 +987,7 @@ export function HabitBoard({
           width: 7px;
           height: 7px;
           border-radius: 50%;
-          background: var(--dot-empty);
+          background: rgba(255, 255, 255, 0.14);
         }
         .dot.filled {
           background: var(--accent);
@@ -1182,7 +998,7 @@ export function HabitBoard({
           justify-content: space-between;
           gap: 0.6rem;
           padding: 0.65rem 1.25rem;
-          border-top: 1px solid var(--border);
+          border-top: 1px solid rgba(255, 255, 255, 0.07);
         }
         .habit-row-actions {
           display: inline-flex;
@@ -1197,7 +1013,7 @@ export function HabitBoard({
           display: grid;
           place-items: center;
           color: var(--muted);
-          background: transparent;
+          background: rgba(255, 255, 255, 0.04);
           border: 1px solid transparent;
           opacity: 0.65;
           transition: opacity 0.18s, color 0.18s, background 0.18s, border-color 0.18s;
@@ -1210,20 +1026,20 @@ export function HabitBoard({
         }
         .edit-habit-btn:hover {
           color: var(--accent-2);
-          background: color-mix(in srgb, var(--accent) 14%, transparent);
-          border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+          background: rgba(167, 139, 250, 0.14);
+          border-color: rgba(167, 139, 250, 0.3);
         }
         .delete-habit-btn:hover {
-          color: var(--danger-ink);
-          background: var(--danger-bg);
-          border-color: var(--danger-border);
+          color: #fca5a5;
+          background: rgba(248, 113, 113, 0.14);
+          border-color: rgba(248, 113, 113, 0.3);
         }
         .delete-confirm-btn {
           padding: 0.28rem 0.55rem;
           border-radius: 7px;
-          background: var(--danger-bg);
-          border: 1px solid var(--danger-border);
-          color: var(--danger-ink);
+          background: rgba(248, 113, 113, 0.22);
+          border: 1px solid rgba(248, 113, 113, 0.5);
+          color: #fecaca;
           font-size: 0.72rem;
           font-weight: 600;
         }
@@ -1236,7 +1052,7 @@ export function HabitBoard({
           font-variant-numeric: tabular-nums;
         }
         .token-count svg {
-          color: var(--freeze-ink);
+          color: #7dd3fc;
         }
         .use-token-btn {
           display: inline-flex;
@@ -1244,19 +1060,20 @@ export function HabitBoard({
           gap: 0.35rem;
           padding: 0.34rem 0.72rem;
           border-radius: 8px;
-          background: var(--freeze-bg);
-          border: 1px solid var(--freeze-border);
-          color: var(--freeze-ink);
+          background: rgba(56, 189, 248, 0.14);
+          border: 1px solid rgba(56, 189, 248, 0.35);
+          color: #bae6fd;
           font-size: 0.76rem;
           font-weight: 600;
           white-space: nowrap;
-          transition: opacity 0.18s, filter 0.18s;
+          transition: opacity 0.18s, background 0.18s, border-color 0.18s;
         }
         .use-token-btn:hover:not(:disabled) {
-          filter: brightness(1.08);
+          background: rgba(56, 189, 248, 0.24);
+          border-color: rgba(56, 189, 248, 0.55);
         }
         .use-token-btn:disabled {
-          opacity: 0.42;
+          opacity: 0.35;
           cursor: not-allowed;
         }
         .frozen-badge {
@@ -1265,9 +1082,9 @@ export function HabitBoard({
           gap: 0.35rem;
           padding: 0.3rem 0.65rem;
           border-radius: 8px;
-          background: var(--freeze-bg);
-          border: 1px solid var(--freeze-border);
-          color: var(--freeze-ink);
+          background: rgba(56, 189, 248, 0.18);
+          border: 1px solid rgba(56, 189, 248, 0.45);
+          color: #7dd3fc;
           font-size: 0.74rem;
           font-weight: 600;
         }
@@ -1277,8 +1094,8 @@ export function HabitBoard({
           gap: 0.3rem;
           padding: 0.3rem 0.58rem;
           border-radius: 8px;
-          background: var(--surface-subtle);
-          border: 1px solid var(--border);
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.12);
           color: var(--muted);
           font-size: 0.73rem;
           font-weight: 600;
@@ -1288,21 +1105,21 @@ export function HabitBoard({
         }
         .reminder-chip-btn:hover {
           color: var(--text);
-          border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-          background: var(--surface-hover);
+          border-color: rgba(167, 139, 250, 0.45);
+          background: rgba(255, 255, 255, 0.09);
         }
         .reminder-chip-btn.active {
-          color: var(--accent-2);
-          background: color-mix(in srgb, var(--accent) 16%, transparent);
-          border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+          color: #e9d5ff;
+          background: rgba(167, 139, 250, 0.18);
+          border-color: rgba(167, 139, 250, 0.45);
         }
         .reminder-picker-row {
           display: flex;
           align-items: center;
           gap: 0.4rem;
           padding: 0.55rem 1.25rem;
-          border-top: 1px solid var(--border);
-          background: var(--surface-subtle);
+          border-top: 1px solid rgba(255, 255, 255, 0.07);
+          background: rgba(167, 139, 250, 0.06);
           flex-wrap: wrap;
         }
         .reminder-picker-label {
@@ -1313,23 +1130,23 @@ export function HabitBoard({
         .reminder-picker-row input[type='time'] {
           flex: 1;
           min-width: 105px;
-          background: var(--surface-input);
-          border: 1px solid var(--border-strong);
+          background: rgba(0, 0, 0, 0.35);
+          border: 1px solid rgba(255, 255, 255, 0.14);
           border-radius: 8px;
           padding: 0.28rem 0.5rem;
           color: var(--text);
           font-size: 0.78rem;
-          color-scheme: var(--color-scheme);
+          color-scheme: dark;
           outline: none;
         }
         .reminder-picker-row input[type='time']:focus {
-          border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+          border-color: rgba(167, 139, 250, 0.6);
         }
         .reminder-save-btn {
           padding: 0.3rem 0.65rem;
           border-radius: 7px;
           background: var(--accent);
-          color: var(--accent-contrast);
+          color: #0a0014;
           font-size: 0.74rem;
           font-weight: 700;
           white-space: nowrap;
@@ -1342,17 +1159,17 @@ export function HabitBoard({
           display: grid;
           place-items: center;
           color: var(--muted);
-          background: var(--surface-subtle);
-          border: 1px solid var(--border);
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.1);
         }
         .reminder-off-btn:hover {
-          color: var(--danger-ink);
-          border-color: var(--danger-border);
-          background: var(--danger-bg);
+          color: #fca5a5;
+          border-color: rgba(248, 113, 113, 0.4);
+          background: rgba(248, 113, 113, 0.14);
         }
         .reminder-cancel-btn:hover {
           color: var(--text);
-          background: var(--surface-hover);
+          background: rgba(255, 255, 255, 0.12);
         }
         .edit-reminder-row {
           display: flex;
@@ -1370,12 +1187,12 @@ export function HabitBoard({
         }
         .edit-reminder-controls input[type='time'] {
           flex: 1;
-          color-scheme: var(--color-scheme);
+          color-scheme: dark;
         }
         .edit-clear-time {
           padding: 0.36rem 0.6rem;
           border-radius: 8px;
-          background: var(--surface-subtle);
+          background: rgba(255, 255, 255, 0.06);
           color: var(--muted);
           font-size: 0.74rem;
         }
@@ -1387,7 +1204,7 @@ export function HabitBoard({
           flex-direction: column;
           gap: 0.5rem;
           padding: 0.65rem 1.25rem 0.95rem;
-          border-top: 1px solid var(--border);
+          border-top: 1px solid rgba(255, 255, 255, 0.07);
           margin-top: auto;
         }
         .habit-notes-list {
@@ -1402,11 +1219,11 @@ export function HabitBoard({
           font-size: 0.77rem;
           line-height: 1.35;
           color: var(--text);
-          opacity: 0.9;
+          opacity: 0.88;
           padding: 0.36rem 0.6rem;
           border-radius: 8px;
-          background: var(--surface-subtle);
-          border: 1px solid var(--border);
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.06);
           word-break: break-word;
         }
         .notes-expand-btn {
@@ -1427,8 +1244,8 @@ export function HabitBoard({
         .habit-note-form input {
           flex: 1;
           min-width: 0;
-          background: var(--surface-input);
-          border: 1px solid var(--border);
+          background: rgba(0, 0, 0, 0.3);
+          border: 1px solid rgba(255, 255, 255, 0.08);
           border-radius: 8px;
           padding: 0.38rem 0.65rem;
           color: var(--text);
@@ -1438,10 +1255,10 @@ export function HabitBoard({
         }
         .habit-note-form input::placeholder {
           color: var(--muted);
-          opacity: 0.75;
+          opacity: 0.7;
         }
         .habit-note-form input:focus {
-          border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+          border-color: rgba(167, 139, 250, 0.5);
         }
         .note-submit-btn {
           width: 28px;
@@ -1450,13 +1267,13 @@ export function HabitBoard({
           border-radius: 8px;
           display: grid;
           place-items: center;
-          background: color-mix(in srgb, var(--accent) 20%, transparent);
-          border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+          background: rgba(167, 139, 250, 0.18);
+          border: 1px solid rgba(167, 139, 250, 0.35);
           color: var(--text);
           transition: background 0.18s, opacity 0.18s;
         }
         .note-submit-btn:hover:not(:disabled) {
-          background: color-mix(in srgb, var(--accent) 34%, transparent);
+          background: rgba(167, 139, 250, 0.32);
         }
         .note-submit-btn:disabled {
           opacity: 0.35;
@@ -1467,7 +1284,7 @@ export function HabitBoard({
           flex-direction: column;
           gap: 0.5rem;
           padding: 0.65rem 1.25rem;
-          border-top: 1px solid var(--border);
+          border-top: 1px solid rgba(255, 255, 255, 0.07);
         }
         .habit-tags-list {
           display: flex;
@@ -1480,17 +1297,16 @@ export function HabitBoard({
           gap: 0.25rem;
           padding: 0.18rem 0.35rem 0.18rem 0.52rem;
           border-radius: 7px;
-          background: color-mix(in srgb, var(--cat-color) 11%, transparent);
-          border: 1px solid color-mix(in srgb, var(--cat-color) 28%, transparent);
+          background: color-mix(in srgb, var(--accent) 14%, rgba(255, 255, 255, 0.04));
+          border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
           font-size: 0.72rem;
-          color: var(--cat-ink);
-          transition: border-color 0.18s, background 0.18s, color 0.18s;
+          color: var(--text);
+          transition: border-color 0.18s, background 0.18s;
         }
         .habit-tag-chip:hover,
         .habit-tag-chip.selected {
-          background: color-mix(in srgb, var(--cat-color) 22%, transparent);
-          border-color: var(--cat-color);
-          color: var(--cat-ink);
+          background: color-mix(in srgb, var(--accent) 26%, transparent);
+          border-color: color-mix(in srgb, var(--accent) 65%, transparent);
         }
         .habit-tag-label {
           color: inherit;
@@ -1504,13 +1320,12 @@ export function HabitBoard({
           width: 16px;
           height: 16px;
           border-radius: 4px;
-          color: inherit;
-          opacity: 0.72;
-          transition: opacity 0.15s, background 0.15s;
+          color: var(--muted);
+          transition: color 0.15s, background 0.15s;
         }
         .habit-tag-remove:hover {
-          opacity: 1;
-          background: var(--surface-hover);
+          color: var(--text);
+          background: rgba(255, 255, 255, 0.12);
         }
         .habit-tag-form {
           display: flex;
@@ -1526,8 +1341,8 @@ export function HabitBoard({
         .habit-tag-form input {
           flex: 1;
           min-width: 0;
-          background: var(--surface-input);
-          border: 1px solid var(--border);
+          background: rgba(0, 0, 0, 0.28);
+          border: 1px solid rgba(255, 255, 255, 0.08);
           border-radius: 8px;
           padding: 0.34rem 0.6rem;
           color: var(--text);
@@ -1537,10 +1352,10 @@ export function HabitBoard({
         }
         .habit-tag-form input::placeholder {
           color: var(--muted);
-          opacity: 0.75;
+          opacity: 0.7;
         }
         .habit-tag-form input:focus {
-          border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+          border-color: rgba(167, 139, 250, 0.5);
         }
         .tag-submit-btn {
           width: 26px;
@@ -1549,14 +1364,14 @@ export function HabitBoard({
           border-radius: 7px;
           display: grid;
           place-items: center;
-          background: var(--surface-subtle);
-          border: 1px solid var(--border-strong);
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.12);
           color: var(--text);
           transition: background 0.18s, border-color 0.18s, opacity 0.18s;
         }
         .tag-submit-btn:hover:not(:disabled) {
-          background: color-mix(in srgb, var(--accent) 22%, transparent);
-          border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+          background: rgba(167, 139, 250, 0.22);
+          border-color: rgba(167, 139, 250, 0.45);
         }
         .tag-submit-btn:disabled {
           opacity: 0.35;
@@ -1588,46 +1403,29 @@ export function HabitBoard({
           gap: 0.35rem;
           padding: 0.3rem 0.68rem;
           border-radius: 8px;
-          background: var(--surface-card);
-          border: 1px solid var(--border);
+          background: rgba(18, 15, 28, 0.72);
+          border: 1px solid rgba(255, 255, 255, 0.08);
           color: var(--muted);
           font-size: 0.76rem;
           font-weight: 500;
           white-space: nowrap;
           transition: color 0.18s, border-color 0.18s, background 0.18s;
         }
-        .tag-filter-btn.color-tinted {
-          background: color-mix(in srgb, var(--tag-color) 9%, transparent);
-          border-color: color-mix(in srgb, var(--tag-color) 24%, transparent);
-          color: var(--tag-ink);
-        }
         .tag-filter-btn:hover {
           color: var(--text);
-          border-color: color-mix(in srgb, var(--accent) 38%, transparent);
-        }
-        .tag-filter-btn.color-tinted:hover {
-          color: var(--tag-ink);
-          background: color-mix(in srgb, var(--tag-color) 16%, transparent);
-          border-color: color-mix(in srgb, var(--tag-color) 46%, transparent);
+          border-color: rgba(167, 139, 250, 0.38);
         }
         .tag-filter-btn.active {
           color: var(--text);
-          background: color-mix(in srgb, var(--accent) 20%, transparent);
-          border-color: color-mix(in srgb, var(--accent) 50%, transparent);
-          font-weight: 600;
-        }
-        .tag-filter-btn.color-tinted.active {
-          color: var(--tag-ink);
-          background: color-mix(in srgb, var(--tag-color) 22%, transparent);
-          border-color: var(--tag-color);
-          font-weight: 600;
+          background: rgba(167, 139, 250, 0.2);
+          border-color: rgba(167, 139, 250, 0.5);
         }
         .empty-state {
           padding: 2rem;
           text-align: center;
           border-radius: 18px;
-          background: var(--surface-card);
-          border: 1px dashed var(--border-strong);
+          background: rgba(18, 15, 28, 0.55);
+          border: 1px dashed rgba(255, 255, 255, 0.14);
           color: var(--muted);
           font-size: 0.9rem;
           display: flex;
@@ -1638,8 +1436,8 @@ export function HabitBoard({
         .clear-filters-btn {
           padding: 0.42rem 0.85rem;
           border-radius: 9px;
-          background: color-mix(in srgb, var(--accent) 18%, transparent);
-          border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+          background: rgba(167, 139, 250, 0.18);
+          border: 1px solid rgba(167, 139, 250, 0.4);
           color: var(--accent-2);
           font-size: 0.8rem;
           font-weight: 600;

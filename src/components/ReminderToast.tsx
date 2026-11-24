@@ -76,9 +76,9 @@ export function ReminderToast({
           gap: 0.75rem;
           padding: 0.85rem 0.95rem;
           border-radius: 16px;
-          background: var(--dropdown-bg);
-          border: 1px solid color-mix(in srgb, var(--toast-accent) 45%, var(--border-strong));
-          box-shadow: var(--shadow-overlay);
+          background: rgba(16, 12, 28, 0.94);
+          border: 1px solid color-mix(in srgb, var(--toast-accent) 45%, rgba(255, 255, 255, 0.14));
+          box-shadow: 0 18px 46px rgba(0, 0, 0, 0.55);
           animation: reminder-slide-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
         }
         @keyframes reminder-slide-in {
@@ -159,7 +159,7 @@ export function ReminderToast({
         }
         .reminder-dismiss-btn:hover {
           color: var(--text);
-          background: var(--surface-hover);
+          background: rgba(255, 255, 255, 0.08);
         }
       `}</style>
     </div>

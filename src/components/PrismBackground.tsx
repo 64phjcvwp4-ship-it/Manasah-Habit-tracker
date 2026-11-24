@@ -1,20 +1,8 @@
 import Prism from './Prism.jsx'
-import { useTheme } from '../contexts/ThemeContext'
 
 export function PrismBackground() {
-  const { theme } = useTheme()
-  const isLight = theme === 'light'
-
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 0,
-        pointerEvents: 'none',
-        opacity: isLight ? 0.24 : 1,
-      }}
-    >
+    <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
       <Prism
         animationType="rotate"
         timeScale={0.5}
@@ -23,9 +11,9 @@ export function PrismBackground() {
         scale={3.6}
         hueShift={0}
         colorFrequency={1}
-        glow={isLight ? 0.85 : 1}
+        glow={1}
         colors={[]}
-        saturation={isLight ? 1.15 : 1.5}
+        saturation={1.5}
         noise={0}
         offset={undefined}
         interactive
@@ -33,7 +21,7 @@ export function PrismBackground() {
         inertia={0.05}
         intro
         resolution={0.5}
-        lightMode={isLight}
+        lightMode={false}
         dpr={undefined}
         style={undefined}
       />

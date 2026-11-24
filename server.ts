@@ -1,4 +1,3 @@
-import http from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import express, { type Request, type Response } from 'express'
@@ -9,7 +8,6 @@ const PORT = Number(process.env.PORT) || 3000
 
 async function startServer() {
   const app = express()
-  const httpServer = http.createServer(app)
   app.use(express.json({ limit: '64kb' }))
 
   app.get('/api/health', (_req: Request, res: Response) => {
@@ -19,10 +17,7 @@ async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite')
     const vite = await createViteServer({
-      server: {
-        middlewareMode: true,
-        hmr: { server: httpServer },
-      },
+      server: { middlewareMode: true },
       appType: 'spa',
     })
     app.use(vite.middlewares)
@@ -34,7 +29,7 @@ async function startServer() {
     })
   }
 
-  httpServer.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`Maloxie server listening on http://0.0.0.0:${PORT}`)
   })
 }

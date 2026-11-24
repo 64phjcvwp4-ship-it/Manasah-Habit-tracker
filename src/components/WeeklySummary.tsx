@@ -117,7 +117,7 @@ export function WeeklySummary({ habits }: { habits: Habit[] }) {
           display: flex;
           flex-direction: column;
           gap: 0.55rem;
-          background: var(--surface-card);
+          background: rgba(18, 15, 28, 0.72);
           border: 1px solid var(--border);
         }
         .summary-top {
@@ -156,7 +156,7 @@ export function WeeklySummary({ habits }: { habits: Habit[] }) {
           width: 100%;
           height: 6px;
           border-radius: 999px;
-          background: var(--dot-empty);
+          background: rgba(255, 255, 255, 0.08);
           overflow: hidden;
           margin-top: 0.15rem;
         }

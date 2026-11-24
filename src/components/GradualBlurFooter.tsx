@@ -1,9 +1,6 @@
-import { useTheme } from '../contexts/ThemeContext'
 import GradualBlur from './GradualBlur.jsx'
 
 export function GradualBlurFooter() {
-  const { theme } = useTheme()
-
   return (
     <GradualBlur
       position="bottom"
@@ -15,7 +12,7 @@ export function GradualBlurFooter() {
       curve="bezier"
       exponential
       opacity={1}
-      tint={theme === 'light' ? '#f6f4fb' : '#060010'}
+      tint="#060010"
       autoHide
       container={undefined}
       zIndex={35}

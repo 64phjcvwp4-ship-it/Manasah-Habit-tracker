@@ -1,9 +1,6 @@
-import { useTheme } from '../contexts/ThemeContext'
-
 export const USER_LOGO_SRC = '/maloxie-logo.png'
 
 export function MoxieLogo({ small = false }: { small?: boolean }) {
-  const { theme } = useTheme()
   const size = small ? 28 : 36
 
   return (
@@ -28,7 +25,7 @@ export function MoxieLogo({ small = false }: { small?: boolean }) {
           width: size,
           height: size,
           objectFit: 'contain',
-          filter: theme === 'dark' ? 'brightness(0) invert(1)' : 'brightness(0)',
+          filter: 'brightness(0) invert(1)',
           display: 'block',
           flexShrink: 0,
         }}

@@ -7,44 +7,17 @@
 }
 
 :root {
-  --bg: #f6f4fb;
-  --surface: rgba(255, 255, 255, 0.86);
-  --surface-card: rgba(255, 255, 255, 0.88);
-  --surface-elevated: #ffffff;
-  --surface-solid: #ffffff;
-  --surface-subtle: rgba(24, 16, 48, 0.045);
-  --surface-input: rgba(24, 16, 48, 0.05);
-  --surface-hover: rgba(124, 58, 237, 0.08);
-  --dropdown-bg: rgba(255, 255, 255, 0.98);
-  --nav-bg: linear-gradient(to bottom, rgba(246, 244, 251, 0.94), rgba(246, 244, 251, 0.72), transparent);
-  --border: rgba(24, 16, 48, 0.1);
-  --border-strong: rgba(24, 16, 48, 0.16);
-  --text: #151024;
-  --muted: #5a4f73;
-  --accent: #7c3aed;
-  --accent-2: #6d28d9;
-  --accent-contrast: #ffffff;
-  --hero-gradient: linear-gradient(135deg, #5b21b6 0%, #7c3aed 48%, #db2777 100%);
-  --success: #059669;
-  --success-ink: #047857;
-  --success-bg: rgba(16, 185, 129, 0.12);
-  --success-border: rgba(16, 185, 129, 0.3);
-  --freeze-ink: #0369a1;
-  --freeze-bg: rgba(14, 165, 233, 0.12);
-  --freeze-border: rgba(14, 165, 233, 0.3);
-  --danger: #dc2626;
-  --danger-ink: #b91c1c;
-  --danger-bg: rgba(239, 68, 68, 0.1);
-  --danger-border: rgba(239, 68, 68, 0.28);
-  --warn-ink: #92400e;
-  --warn-bg: rgba(254, 243, 199, 0.96);
-  --warn-border: rgba(217, 119, 6, 0.45);
-  --dot-empty: rgba(24, 16, 48, 0.14);
-  --shadow-card: 0 10px 28px rgba(24, 16, 48, 0.08);
-  --shadow-overlay: 0 20px 44px rgba(24, 16, 48, 0.16);
-  --backdrop-scrim: rgba(15, 10, 32, 0.42);
-  --glow: 0 0 40px rgba(124, 58, 237, 0.16);
-  --color-scheme: light;
+  --bg: #060010;
+  --surface: rgba(18, 15, 28, 0.72);
+  --surface-solid: #12101c;
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #f4f0ff;
+  --muted: #a89bbf;
+  --accent: #a78bfa;
+  --accent-2: #c4b5fd;
+  --success: #34d399;
+  --danger: #f87171;
+  --glow: 0 0 40px rgba(167, 139, 250, 0.25);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -55,48 +28,6 @@
   -webkit-font-smoothing: antialiased;
 }
 
-:root[data-theme='dark'],
-:root.dark {
-  --bg: #060010;
-  --surface: rgba(18, 15, 28, 0.72);
-  --surface-card: rgba(18, 15, 28, 0.7);
-  --surface-elevated: rgba(18, 15, 28, 0.88);
-  --surface-solid: #12101c;
-  --surface-subtle: rgba(255, 255, 255, 0.05);
-  --surface-input: rgba(0, 0, 0, 0.34);
-  --surface-hover: rgba(255, 255, 255, 0.09);
-  --dropdown-bg: rgba(14, 10, 26, 0.96);
-  --nav-bg: linear-gradient(to bottom, rgba(6, 0, 16, 0.92), rgba(6, 0, 16, 0.6), transparent);
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
-  --text: #f4f0ff;
-  --muted: #a89bbf;
-  --accent: #a78bfa;
-  --accent-2: #c4b5fd;
-  --accent-contrast: #0a0014;
-  --hero-gradient: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 40%, #f0abfc 100%);
-  --success: #34d399;
-  --success-ink: #6ee7b7;
-  --success-bg: rgba(52, 211, 153, 0.12);
-  --success-border: rgba(52, 211, 153, 0.3);
-  --freeze-ink: #7dd3fc;
-  --freeze-bg: rgba(56, 189, 248, 0.14);
-  --freeze-border: rgba(56, 189, 248, 0.32);
-  --danger: #f87171;
-  --danger-ink: #fecaca;
-  --danger-bg: rgba(248, 113, 113, 0.14);
-  --danger-border: rgba(248, 113, 113, 0.35);
-  --warn-ink: #fde68a;
-  --warn-bg: rgba(24, 18, 36, 0.94);
-  --warn-border: rgba(251, 191, 36, 0.45);
-  --dot-empty: rgba(255, 255, 255, 0.12);
-  --shadow-card: 0 12px 32px rgba(0, 0, 0, 0.35);
-  --shadow-overlay: 0 20px 44px rgba(0, 0, 0, 0.55);
-  --backdrop-scrim: rgba(6, 0, 16, 0.72);
-  --glow: 0 0 40px rgba(167, 139, 250, 0.25);
-  --color-scheme: dark;
-}
-
 html, body, #root {
   min-height: 100%;
   width: 100%;
@@ -105,8 +36,6 @@ html, body, #root {
 body {
   overflow-x: hidden;
   background: var(--bg);
-  color: var(--text);
-  transition: background-color 0.22s ease, color 0.22s ease;
 }
 
 h1, h2, h3, h4 {
@@ -136,11 +65,11 @@ a {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(124, 58, 237, 0.32);
+  background: rgba(167, 139, 250, 0.35);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(124, 58, 237, 0.52);
+  background: rgba(167, 139, 250, 0.55);
 }
 
 /* Utility */

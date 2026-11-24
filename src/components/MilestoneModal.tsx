@@ -213,7 +213,7 @@ export function MilestoneModal({
           display: grid;
           place-items: center;
           padding: 1.5rem;
-          background: var(--backdrop-scrim);
+          background: rgba(6, 0, 16, 0.72);
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
           animation: milestoneFade 0.25s ease-out;
@@ -235,11 +235,11 @@ export function MilestoneModal({
           flex-direction: column;
           align-items: center;
           gap: 0.85rem;
-          background: var(--dropdown-bg);
-          border: 1px solid color-mix(in srgb, var(--milestone-accent) 40%, var(--border-strong));
+          background: rgba(18, 13, 30, 0.92);
+          border: 1px solid color-mix(in srgb, var(--milestone-accent) 40%, rgba(255, 255, 255, 0.12));
           box-shadow:
-            var(--shadow-overlay),
-            0 0 60px color-mix(in srgb, var(--milestone-accent) 20%, transparent);
+            0 25px 70px rgba(0, 0, 0, 0.65),
+            0 0 60px color-mix(in srgb, var(--milestone-accent) 22%, transparent);
           animation: milestonePop 0.42s cubic-bezier(0.22, 1, 0.36, 1);
         }
         .milestone-close {
@@ -253,7 +253,7 @@ export function MilestoneModal({
         }
         .milestone-close:hover {
           color: var(--text);
-          background: var(--surface-hover);
+          background: rgba(255, 255, 255, 0.08);
         }
         .milestone-emblem {
           position: relative;
