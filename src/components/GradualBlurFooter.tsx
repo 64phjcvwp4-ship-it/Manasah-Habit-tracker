@@ -1,15 +1,22 @@
-/** GradualBlur-inspired bottom fade. Replace with real component later. */
+import GradualBlur from './GradualBlur.jsx'
+
 export function GradualBlurFooter() {
   return (
-    <div
-      style={{
-        position: 'relative',
-        height: 80,
-        marginTop: -40,
-        pointerEvents: 'none',
-        zIndex: 1,
-        background: 'linear-gradient(to top, #060010 20%, transparent)',
-      }}
+    <GradualBlur
+      position="bottom"
+      target="page"
+      height="5rem"
+      width={undefined}
+      strength={2}
+      layers={6}
+      curve="bezier"
+      exponential
+      opacity={1}
+      tint="#060010"
+      autoHide
+      container={undefined}
+      zIndex={35}
+      style={undefined}
     />
   )
 }

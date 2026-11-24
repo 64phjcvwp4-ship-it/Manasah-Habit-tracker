@@ -1,53 +1,845 @@
-import type { Habit } from '../App'
-import { Check } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import {
+  Bell,
+  BellOff,
+  Check,
+  Layers,
+  LayoutGrid,
+  MessageSquarePlus,
+  Pencil,
+  Plus,
+  Search,
+  ShieldCheck,
+  Snowflake,
+  Tag,
+  Trash2,
+  X,
+} from 'lucide-react'
+import { VALIDATION_LIMITS } from '../firebase'
+import {
+  formatReminderTime,
+  HABIT_CATEGORIES,
+  HABIT_PALETTE,
+  type Habit,
+  type HabitCategory,
+} from '../lib/habits'
 
 export function HabitBoard({
   habits,
   onToggle,
+  onUseToken,
+  onAddNote,
+  onAddTag,
+  onRemoveTag,
+  onSetReminder,
+  onEdit,
+  onDelete,
 }: {
   habits: Habit[]
   onToggle: (id: string) => void
+  onUseToken: (id: string) => void
+  onAddNote: (id: string, note: string) => void
+  onAddTag: (id: string, tag: string) => void
+  onRemoveTag: (id: string, tag: string) => void
+  onSetReminder?: (id: string, reminderTime: string) => void
+  onEdit?: (
+    id: string,
+    updates: { name: string; category: HabitCategory; color: string; reminderTime?: string }
+  ) => void
+  onDelete?: (id: string) => void
 }) {
-  return (
-    <div className="habit-grid">
-      {habits.map(h => (
-        <button
-          key={h.id}
-          className={`habit-card ${h.completedToday ? 'done' : ''}`}
-          onClick={() => onToggle(h.id)}
-          style={{ '--accent': h.color } as React.CSSProperties}
-        >
-          <div className="habit-top">
-            <span className="habit-name">{h.name}</span>
-            <span className={`check ${h.completedToday ? 'on' : ''}`}>
-              <Check size={16} strokeWidth={3} />
-            </span>
-          </div>
-          <div className="habit-meta">
-            <span className="streak">{h.streak} day streak</span>
-            <div className="dots">
-              {h.history.map((d, i) => (
-                <span key={i} className={`dot ${d ? 'filled' : ''}`} />
+  const [selectedCategory, setSelectedCategory] = useState<string>('All')
+  const [selectedTag, setSelectedTag] = useState<string>('All')
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  const [grouped, setGrouped] = useState<boolean>(false)
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({})
+  const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({})
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({})
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [reminderPickerId, setReminderPickerId] = useState<string | null>(null)
+  const [reminderDraft, setReminderDraft] = useState<string>('09:00')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState<{
+    name: string
+    category: HabitCategory
+    color: string
+    reminderTime: string
+  }>({ name: '', category: 'Focus', color: HABIT_PALETTE[0], reminderTime: '' })
+
+  const categories = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const h of habits) {
+      const cat = h.category || 'Other'
+      counts.set(cat, (counts.get(cat) ?? 0) + 1)
+    }
+    return Array.from(counts.entries()).map(([name, count]) => ({ name, count }))
+  }, [habits])
+
+  const availableTags = useMemo(() => {
+    const counts = new Map<string, { label: string; count: number }>()
+    for (const h of habits) {
+      for (const tag of h.tags ?? []) {
+        const key = tag.toLowerCase()
+        const existing = counts.get(key)
+        if (existing) {
+          existing.count += 1
+        } else {
+          counts.set(key, { label: tag, count: 1 })
+        }
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([key, val]) => ({ key, label: val.label, count: val.count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+  }, [habits])
+
+  const activeFilter =
+    selectedCategory === 'All' || categories.some(c => c.name === selectedCategory)
+      ? selectedCategory
+      : 'All'
+
+  const activeTagFilter =
+    selectedTag === 'All' || availableTags.some(t => t.key === selectedTag.toLowerCase())
+      ? selectedTag
+      : 'All'
+
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+
+  const filteredHabits = useMemo(
+    () =>
+      habits.filter(h => {
+        const matchesCategory =
+          activeFilter === 'All' || (h.category || 'Other') === activeFilter
+        const matchesTag =
+          activeTagFilter === 'All' ||
+          (h.tags ?? []).some(t => t.toLowerCase() === activeTagFilter.toLowerCase())
+        const matchesSearch =
+          !normalizedQuery ||
+          h.name.toLowerCase().includes(normalizedQuery) ||
+          (h.category || '').toLowerCase().includes(normalizedQuery) ||
+          (h.tags ?? []).some(t => t.toLowerCase().includes(normalizedQuery)) ||
+          (h.notes ?? []).some(n => n.toLowerCase().includes(normalizedQuery))
+        return matchesCategory && matchesTag && matchesSearch
+      }),
+    [habits, activeFilter, activeTagFilter, normalizedQuery]
+  )
+
+  const groupedHabits = useMemo(() => {
+    const map = new Map<string, Habit[]>()
+    for (const h of filteredHabits) {
+      const cat = h.category || 'Other'
+      const list = map.get(cat)
+      if (list) list.push(h)
+      else map.set(cat, [h])
+    }
+    return Array.from(map.entries())
+  }, [filteredHabits])
+
+  const handleNoteSubmit = (e: React.FormEvent, id: string) => {
+    e.preventDefault()
+    const draft = (noteDrafts[id] ?? '').trim()
+    if (!draft) return
+    onAddNote(id, draft)
+    setNoteDrafts(prev => ({ ...prev, [id]: '' }))
+  }
+
+  const handleTagSubmit = (e: React.FormEvent, id: string) => {
+    e.preventDefault()
+    const draft = (tagDrafts[id] ?? '').trim()
+    if (!draft) return
+    onAddTag(id, draft)
+    setTagDrafts(prev => ({ ...prev, [id]: '' }))
+  }
+
+  const startEdit = (h: Habit) => {
+    setReminderPickerId(null)
+    setEditingId(h.id)
+    setEditDraft({
+      name: h.name,
+      category: h.category,
+      color: h.color,
+      reminderTime: h.reminderTime ?? '',
+    })
+  }
+
+  const handleEditSubmit = (e: React.FormEvent, id: string) => {
+    e.preventDefault()
+    if (!onEdit || !editDraft.name.trim()) return
+    onEdit(id, editDraft)
+    setEditingId(null)
+  }
+
+  const openReminderPicker = (h: Habit) => {
+    if (reminderPickerId === h.id) {
+      setReminderPickerId(null)
+      return
+    }
+    setReminderDraft(h.reminderTime || '09:00')
+    setReminderPickerId(h.id)
+  }
+
+  const handleReminderSubmit = (e: React.FormEvent, id: string) => {
+    e.preventDefault()
+    if (!onSetReminder || !reminderDraft) return
+    onSetReminder(id, reminderDraft)
+    setReminderPickerId(null)
+  }
+
+  const renderCard = (h: Habit) => {
+    const canUseToken = !h.completedToday && !h.frozenToday && h.streakFreeze > 0
+    const draft = noteDrafts[h.id] ?? ''
+    const tagDraft = tagDrafts[h.id] ?? ''
+    const habitTags = h.tags ?? []
+    const isEditing = editingId === h.id
+    const isPickingReminder = reminderPickerId === h.id
+    const reminderLabel = formatReminderTime(h.reminderTime)
+    const showAllNotes = Boolean(expandedNotes[h.id])
+    const visibleNotes = showAllNotes ? h.notes : h.notes.slice(-2)
+    const hiddenCount = h.notes.length - visibleNotes.length
+
+    return (
+      <div
+        key={h.id}
+        className={`habit-card ${h.completedToday ? 'done' : ''} ${h.frozenToday ? 'frozen' : ''}`}
+        style={{ '--accent': h.color } as React.CSSProperties}
+      >
+        {isEditing ? (
+          <form className="habit-edit-panel" onSubmit={e => handleEditSubmit(e, h.id)}>
+            <div className="edit-panel-header">
+              <span>Edit habit</span>
+              <button
+                type="button"
+                className="edit-cancel-icon"
+                onClick={() => setEditingId(null)}
+                aria-label="Cancel editing"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <input
+              type="text"
+              value={editDraft.name}
+              maxLength={VALIDATION_LIMITS.MAX_HABIT_NAME_LENGTH}
+              onChange={e => setEditDraft(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="Habit name"
+              aria-label="Edit habit name"
+              autoFocus
+            />
+            <select
+              value={editDraft.category}
+              onChange={e =>
+                setEditDraft(prev => ({ ...prev, category: e.target.value as HabitCategory }))
+              }
+              aria-label="Edit habit category"
+            >
+              {HABIT_CATEGORIES.map(cat => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+            <div className="edit-color-row" role="radiogroup" aria-label="Habit accent color">
+              {HABIT_PALETTE.map(color => (
+                <button
+                  key={color}
+                  type="button"
+                  role="radio"
+                  aria-checked={editDraft.color === color}
+                  className={`color-swatch ${editDraft.color === color ? 'selected' : ''}`}
+                  style={{ background: color }}
+                  onClick={() => setEditDraft(prev => ({ ...prev, color }))}
+                  aria-label={`Select color ${color}`}
+                />
               ))}
             </div>
+            <div className="edit-reminder-row">
+              <label htmlFor={`edit-reminder-${h.id}`}>Daily reminder</label>
+              <div className="edit-reminder-controls">
+                <input
+                  id={`edit-reminder-${h.id}`}
+                  type="time"
+                  value={editDraft.reminderTime}
+                  onChange={e => setEditDraft(prev => ({ ...prev, reminderTime: e.target.value }))}
+                  aria-label="Edit daily reminder time"
+                />
+                {editDraft.reminderTime && (
+                  <button
+                    type="button"
+                    className="edit-clear-time"
+                    onClick={() => setEditDraft(prev => ({ ...prev, reminderTime: '' }))}
+                    title="Clear reminder"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="edit-actions">
+              <button
+                type="button"
+                className="edit-cancel-btn"
+                onClick={() => setEditingId(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="edit-save-btn"
+                disabled={!editDraft.name.trim()}
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        ) : (
+          <button
+            type="button"
+            className="habit-main"
+            onClick={() => onToggle(h.id)}
+            aria-pressed={h.completedToday}
+          >
+            <div className="habit-top">
+              <div className="habit-title-wrap">
+                <span className="habit-category">{h.category || 'Other'}</span>
+                <span className="habit-name">{h.name}</span>
+              </div>
+              <span className={`check ${h.completedToday ? 'on' : ''}`}>
+                <Check size={16} strokeWidth={3} />
+              </span>
+            </div>
+            <div className="habit-meta">
+              <span className="streak">{h.streak} day streak</span>
+              <div className="dots">
+                {h.history.map((d, i) => (
+                  <span key={i} className={`dot ${d ? 'filled' : ''}`} />
+                ))}
+              </div>
+            </div>
+          </button>
+        )}
+
+        <div className="habit-freeze-row">
+          <span className="token-count" title="Remaining streak freeze tokens">
+            <Snowflake size={13} />
+            <span>
+              {h.streakFreeze} {h.streakFreeze === 1 ? 'token' : 'tokens'}
+            </span>
+          </span>
+
+          <div className="habit-row-actions">
+            {h.frozenToday ? (
+              <span className="frozen-badge">
+                <ShieldCheck size={13} />
+                Streak frozen today
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="use-token-btn"
+                onClick={() => onUseToken(h.id)}
+                disabled={!canUseToken}
+                title={
+                  h.completedToday
+                    ? 'Already completed today'
+                    : h.streakFreeze <= 0
+                      ? 'No freeze tokens left'
+                      : 'Use 1 streak freeze token to protect your streak today'
+                }
+              >
+                <Snowflake size={13} />
+                Use Token
+              </button>
+            )}
+
+            {onSetReminder && !isEditing && (
+              <button
+                type="button"
+                className={`reminder-chip-btn ${reminderLabel ? 'active' : ''}`}
+                onClick={() => openReminderPicker(h)}
+                aria-expanded={isPickingReminder}
+                aria-label={
+                  reminderLabel
+                    ? `Daily reminder at ${reminderLabel} for ${h.name}`
+                    : `Set daily reminder for ${h.name}`
+                }
+                title={reminderLabel ? `Daily reminder at ${reminderLabel}` : 'Set daily reminder'}
+              >
+                <Bell size={12} />
+                <span>{reminderLabel || 'Remind'}</span>
+              </button>
+            )}
+
+            {onEdit && !isEditing && (
+              <button
+                type="button"
+                className="edit-habit-btn"
+                onClick={() => startEdit(h)}
+                aria-label={`Edit ${h.name}`}
+                title="Edit habit"
+              >
+                <Pencil size={13} />
+              </button>
+            )}
+
+            {onDelete && (
+              confirmDeleteId === h.id ? (
+                <button
+                  type="button"
+                  className="delete-confirm-btn"
+                  onClick={() => {
+                    onDelete(h.id)
+                    setConfirmDeleteId(null)
+                  }}
+                  onBlur={() => setConfirmDeleteId(null)}
+                  title="Click again to delete habit"
+                >
+                  Delete?
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="delete-habit-btn"
+                  onClick={() => setConfirmDeleteId(h.id)}
+                  aria-label={`Delete ${h.name}`}
+                  title="Delete habit"
+                >
+                  <Trash2 size={13} />
+                </button>
+              )
+            )}
           </div>
-        </button>
-      ))}
+        </div>
+
+        {onSetReminder && isPickingReminder && (
+          <form className="reminder-picker-row" onSubmit={e => handleReminderSubmit(e, h.id)}>
+            <label htmlFor={`reminder-time-${h.id}`} className="reminder-picker-label">
+              Daily at
+            </label>
+            <input
+              id={`reminder-time-${h.id}`}
+              type="time"
+              value={reminderDraft}
+              onChange={e => setReminderDraft(e.target.value)}
+              required
+              aria-label={`Reminder time for ${h.name}`}
+            />
+            <button type="submit" className="reminder-save-btn">
+              Save
+            </button>
+            {reminderLabel && (
+              <button
+                type="button"
+                className="reminder-off-btn"
+                onClick={() => {
+                  onSetReminder(h.id, '')
+                  setReminderPickerId(null)
+                }}
+                title="Turn off reminder"
+                aria-label={`Turn off reminder for ${h.name}`}
+              >
+                <BellOff size={13} />
+              </button>
+            )}
+            <button
+              type="button"
+              className="reminder-cancel-btn"
+              onClick={() => setReminderPickerId(null)}
+              aria-label="Close reminder picker"
+            >
+              <X size={13} />
+            </button>
+          </form>
+        )}
+
+        <div className="habit-tags-section">
+          {habitTags.length > 0 && (
+            <div className="habit-tags-list" aria-label={`Tags for ${h.name}`}>
+              {habitTags.map(tag => {
+                const isSelected = activeTagFilter.toLowerCase() === tag.toLowerCase()
+                return (
+                  <span key={tag} className={`habit-tag-chip ${isSelected ? 'selected' : ''}`}>
+                    <button
+                      type="button"
+                      className="habit-tag-label"
+                      onClick={() => setSelectedTag(isSelected ? 'All' : tag)}
+                      title={isSelected ? `Clear #${tag} filter` : `Filter by #${tag}`}
+                    >
+                      #{tag}
+                    </button>
+                    <button
+                      type="button"
+                      className="habit-tag-remove"
+                      onClick={() => onRemoveTag(h.id, tag)}
+                      aria-label={`Remove tag ${tag} from ${h.name}`}
+                      title={`Remove #${tag}`}
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                )
+              })}
+            </div>
+          )}
+
+          <form className="habit-tag-form" onSubmit={e => handleTagSubmit(e, h.id)}>
+            <Tag size={12} className="tag-input-icon" />
+            <input
+              type="text"
+              value={tagDraft}
+              maxLength={VALIDATION_LIMITS.MAX_TAG_LENGTH}
+              onChange={e => setTagDrafts(prev => ({ ...prev, [h.id]: e.target.value }))}
+              placeholder={
+                habitTags.length >= VALIDATION_LIMITS.MAX_TAGS_COUNT
+                  ? 'Tag limit reached (15)'
+                  : 'Add custom tag…'
+              }
+              disabled={habitTags.length >= VALIDATION_LIMITS.MAX_TAGS_COUNT}
+              aria-label={`Add custom tag for ${h.name}`}
+            />
+            <button
+              type="submit"
+              className="tag-submit-btn"
+              disabled={!tagDraft.trim() || habitTags.length >= VALIDATION_LIMITS.MAX_TAGS_COUNT}
+              aria-label={`Save tag for ${h.name}`}
+              title="Add tag"
+            >
+              <Plus size={13} />
+            </button>
+          </form>
+        </div>
+
+        <div className="habit-notes-section">
+          {h.notes.length > 0 && (
+            <>
+              <ul className="habit-notes-list" aria-label={`Logs for ${h.name}`}>
+                {visibleNotes.map((note, idx) => (
+                  <li key={`${idx}-${note.slice(0, 16)}`}>{note}</li>
+                ))}
+              </ul>
+              {(hiddenCount > 0 || showAllNotes) && h.notes.length > 2 && (
+                <button
+                  type="button"
+                  className="notes-expand-btn"
+                  onClick={() => setExpandedNotes(prev => ({ ...prev, [h.id]: !showAllNotes }))}
+                >
+                  {showAllNotes ? 'Show fewer logs' : `Show all ${h.notes.length} logs`}
+                </button>
+              )}
+            </>
+          )}
+
+          <form className="habit-note-form" onSubmit={e => handleNoteSubmit(e, h.id)}>
+            <input
+              type="text"
+              value={draft}
+              maxLength={VALIDATION_LIMITS.MAX_NOTE_LENGTH}
+              onChange={e => setNoteDrafts(prev => ({ ...prev, [h.id]: e.target.value }))}
+              placeholder={
+                h.notes.length >= VALIDATION_LIMITS.MAX_NOTES_COUNT
+                  ? 'Note limit reached (50)'
+                  : 'Add daily log or thought…'
+              }
+              disabled={h.notes.length >= VALIDATION_LIMITS.MAX_NOTES_COUNT}
+              aria-label={`Add note for ${h.name}`}
+            />
+            <button
+              type="submit"
+              className="note-submit-btn"
+              disabled={!draft.trim() || h.notes.length >= VALIDATION_LIMITS.MAX_NOTES_COUNT}
+              aria-label={`Save log for ${h.name}`}
+              title="Add log"
+            >
+              <MessageSquarePlus size={14} />
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="habit-board">
+      <div className="board-controls">
+        <div className="category-tabs" role="tablist" aria-label="Filter habits by category">
+          <button
+            role="tab"
+            aria-selected={activeFilter === 'All'}
+            className={`cat-tab ${activeFilter === 'All' ? 'active' : ''}`}
+            onClick={() => setSelectedCategory('All')}
+          >
+            All <span className="cat-count">{habits.length}</span>
+          </button>
+          {categories.map(c => (
+            <button
+              key={c.name}
+              role="tab"
+              aria-selected={activeFilter === c.name}
+              className={`cat-tab ${activeFilter === c.name ? 'active' : ''}`}
+              onClick={() => setSelectedCategory(c.name)}
+            >
+              {c.name} <span className="cat-count">{c.count}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="board-right-controls">
+          <div className="board-search">
+            <Search size={14} className="search-icon" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search habits, tags…"
+              aria-label="Search habits"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="search-clear"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className={`group-toggle ${grouped ? 'active' : ''}`}
+            onClick={() => setGrouped(g => !g)}
+            aria-pressed={grouped}
+            title={grouped ? 'Switch to flat grid' : 'Group by category'}
+          >
+            {grouped ? <Layers size={15} /> : <LayoutGrid size={15} />}
+            <span>{grouped ? 'Grouped' : 'Grid'}</span>
+          </button>
+        </div>
+      </div>
+
+      {availableTags.length > 0 && (
+        <div className="tag-filter-bar" role="group" aria-label="Filter habits by tag">
+          <span className="tag-filter-heading">
+            <Tag size={13} />
+            <span>Tags</span>
+          </span>
+          <div className="tag-filter-tabs">
+            <button
+              type="button"
+              className={`tag-filter-btn ${activeTagFilter === 'All' ? 'active' : ''}`}
+              aria-pressed={activeTagFilter === 'All'}
+              onClick={() => setSelectedTag('All')}
+            >
+              All tags
+            </button>
+            {availableTags.map(t => {
+              const isSelected = activeTagFilter.toLowerCase() === t.key
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  className={`tag-filter-btn ${isSelected ? 'active' : ''}`}
+                  aria-pressed={isSelected}
+                  onClick={() => setSelectedTag(isSelected ? 'All' : t.label)}
+                >
+                  #{t.label} <span className="cat-count">{t.count}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {filteredHabits.length === 0 ? (
+        <div className="empty-state">
+          <p>No habits match the current filters.</p>
+          {(activeFilter !== 'All' || activeTagFilter !== 'All' || Boolean(normalizedQuery)) && (
+            <button
+              type="button"
+              className="clear-filters-btn"
+              onClick={() => {
+                setSelectedCategory('All')
+                setSelectedTag('All')
+                setSearchQuery('')
+              }}
+            >
+              Reset filters
+            </button>
+          )}
+        </div>
+      ) : grouped ? (
+        <div className="habit-groups">
+          {groupedHabits.map(([category, items]) => {
+            const doneCount = items.filter(i => i.completedToday).length
+            return (
+              <div key={category} className="habit-group">
+                <div className="group-header">
+                  <h3>{category}</h3>
+                  <span>
+                    {doneCount}/{items.length} done
+                  </span>
+                </div>
+                <div className="habit-grid">{items.map(renderCard)}</div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="habit-grid">{filteredHabits.map(renderCard)}</div>
+      )}
+
       <style>{`
+        .habit-board {
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
+        }
+        .board-controls {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.75rem;
+          flex-wrap: wrap;
+        }
+        .board-right-controls {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          flex-wrap: wrap;
+        }
+        .board-search {
+          position: relative;
+          display: flex;
+          align-items: center;
+          background: rgba(18, 15, 28, 0.65);
+          border: 1px solid rgba(255, 255, 255, 0.09);
+          border-radius: 10px;
+          padding: 0 0.55rem;
+          height: 34px;
+          min-width: 175px;
+        }
+        .board-search:focus-within {
+          border-color: rgba(167, 139, 250, 0.45);
+        }
+        .search-icon {
+          color: var(--muted);
+          opacity: 0.7;
+          margin-right: 0.35rem;
+          flex-shrink: 0;
+        }
+        .board-search input {
+          background: transparent;
+          border: none;
+          outline: none;
+          color: var(--text);
+          font-size: 0.8rem;
+          width: 100%;
+          min-width: 0;
+        }
+        .board-search input::placeholder {
+          color: var(--muted);
+          opacity: 0.7;
+        }
+        .search-clear {
+          color: var(--muted);
+          display: grid;
+          place-items: center;
+          padding: 2px;
+        }
+        .category-tabs {
+          display: flex;
+          align-items: center;
+          gap: 0.45rem;
+          flex-wrap: wrap;
+        }
+        .cat-tab {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.4rem;
+          padding: 0.42rem 0.85rem;
+          border-radius: 10px;
+          background: rgba(18, 15, 28, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: var(--muted);
+          font-size: 0.82rem;
+          font-weight: 500;
+          transition: color 0.18s, border-color 0.18s, background 0.18s;
+        }
+        .cat-tab:hover {
+          color: var(--text);
+          border-color: rgba(167, 139, 250, 0.3);
+        }
+        .cat-tab.active {
+          color: var(--text);
+          background: rgba(167, 139, 250, 0.18);
+          border-color: rgba(167, 139, 250, 0.45);
+        }
+        .cat-count {
+          font-size: 0.72rem;
+          opacity: 0.75;
+        }
+        .group-toggle {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.4rem;
+          padding: 0.42rem 0.85rem;
+          border-radius: 10px;
+          background: rgba(18, 15, 28, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: var(--muted);
+          font-size: 0.82rem;
+          font-weight: 500;
+          height: 34px;
+          transition: color 0.18s, border-color 0.18s, background 0.18s;
+        }
+        .group-toggle:hover,
+        .group-toggle.active {
+          color: var(--text);
+          background: rgba(167, 139, 250, 0.15);
+          border-color: rgba(167, 139, 250, 0.4);
+        }
+        .habit-groups {
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
+        }
+        .habit-group {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+        .group-header {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 0.75rem;
+          padding-bottom: 0.4rem;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        }
+        .group-header h3 {
+          font-size: 1rem;
+          font-weight: 600;
+          color: var(--accent-2);
+        }
+        .group-header span {
+          font-size: 0.78rem;
+          color: var(--muted);
+        }
         .habit-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(275px, 1fr));
           gap: 1rem;
         }
         .habit-card {
-          text-align: left;
-          padding: 1.15rem 1.25rem;
+          display: flex;
+          flex-direction: column;
           border-radius: 18px;
           background: rgba(18, 15, 28, 0.7);
           border: 1px solid rgba(255,255,255,0.07);
           backdrop-filter: blur(12px);
           transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
           color: inherit;
+          overflow: hidden;
         }
         .habit-card:hover {
           border-color: color-mix(in srgb, var(--accent) 45%, transparent);
@@ -58,12 +850,107 @@ export function HabitBoard({
           border-color: color-mix(in srgb, var(--accent) 55%, transparent);
           box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
         }
+        .habit-card.frozen {
+          border-color: rgba(56, 189, 248, 0.5);
+          box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.18);
+        }
+        .habit-main {
+          width: 100%;
+          text-align: left;
+          padding: 1.15rem 1.25rem 0.9rem;
+          color: inherit;
+        }
+        .habit-edit-panel {
+          display: flex;
+          flex-direction: column;
+          gap: 0.55rem;
+          padding: 1rem 1.15rem;
+        }
+        .edit-panel-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 0.76rem;
+          font-weight: 600;
+          color: var(--accent-2);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        .edit-cancel-icon {
+          color: var(--muted);
+          padding: 2px;
+        }
+        .habit-edit-panel input,
+        .habit-edit-panel select {
+          background: rgba(0, 0, 0, 0.36);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 8px;
+          padding: 0.42rem 0.65rem;
+          color: var(--text);
+          font-size: 0.84rem;
+          outline: none;
+        }
+        .habit-edit-panel select {
+          background: rgba(12, 8, 22, 0.95);
+        }
+        .edit-color-row {
+          display: flex;
+          align-items: center;
+          gap: 0.45rem;
+        }
+        .color-swatch {
+          width: 20px;
+          height: 20px;
+          border-radius: 6px;
+          border: 2px solid transparent;
+          transition: transform 0.15s, border-color 0.15s;
+        }
+        .color-swatch.selected {
+          border-color: #ffffff;
+          transform: scale(1.1);
+        }
+        .edit-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 0.45rem;
+          margin-top: 0.15rem;
+        }
+        .edit-cancel-btn {
+          padding: 0.35rem 0.7rem;
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.06);
+          color: var(--muted);
+          font-size: 0.78rem;
+          font-weight: 500;
+        }
+        .edit-save-btn {
+          padding: 0.35rem 0.75rem;
+          border-radius: 8px;
+          background: var(--accent);
+          color: #0a0014;
+          font-size: 0.78rem;
+          font-weight: 600;
+        }
         .habit-top {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
           gap: 0.75rem;
           margin-bottom: 0.85rem;
+        }
+        .habit-title-wrap {
+          display: flex;
+          flex-direction: column;
+          gap: 0.2rem;
+          min-width: 0;
+        }
+        .habit-category {
+          font-size: 0.7rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--accent);
+          opacity: 0.9;
         }
         .habit-name {
           font-weight: 600;
@@ -107,6 +994,458 @@ export function HabitBoard({
         }
         .dot.filled {
           background: var(--accent);
+        }
+        .habit-freeze-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.6rem;
+          padding: 0.65rem 1.25rem;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .habit-row-actions {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+        }
+        .edit-habit-btn,
+        .delete-habit-btn {
+          width: 26px;
+          height: 26px;
+          border-radius: 7px;
+          display: grid;
+          place-items: center;
+          color: var(--muted);
+          background: transparent;
+          border: 1px solid transparent;
+          opacity: 0.55;
+          transition: opacity 0.18s, color 0.18s, background 0.18s, border-color 0.18s;
+        }
+        .habit-card:hover .edit-habit-btn,
+        .habit-card:hover .delete-habit-btn,
+        .edit-habit-btn:focus-visible,
+        .delete-habit-btn:focus-visible {
+          opacity: 1;
+        }
+        .edit-habit-btn:hover {
+          color: var(--accent-2);
+          background: rgba(167, 139, 250, 0.14);
+          border-color: rgba(167, 139, 250, 0.3);
+        }
+        .delete-habit-btn:hover {
+          color: #fca5a5;
+          background: rgba(248, 113, 113, 0.14);
+          border-color: rgba(248, 113, 113, 0.3);
+        }
+        .delete-confirm-btn {
+          padding: 0.28rem 0.55rem;
+          border-radius: 7px;
+          background: rgba(248, 113, 113, 0.2);
+          border: 1px solid rgba(248, 113, 113, 0.45);
+          color: #fecaca;
+          font-size: 0.72rem;
+          font-weight: 600;
+        }
+        .token-count {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          font-size: 0.76rem;
+          color: var(--muted);
+        }
+        .token-count svg {
+          color: #38bdf8;
+        }
+        .use-token-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          padding: 0.34rem 0.72rem;
+          border-radius: 8px;
+          background: rgba(56, 189, 248, 0.14);
+          border: 1px solid rgba(56, 189, 248, 0.32);
+          color: #7dd3fc;
+          font-size: 0.76rem;
+          font-weight: 600;
+          transition: background 0.18s, border-color 0.18s, opacity 0.18s;
+        }
+        .use-token-btn:hover:not(:disabled) {
+          background: rgba(56, 189, 248, 0.24);
+          border-color: rgba(56, 189, 248, 0.55);
+        }
+        .use-token-btn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        .frozen-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          padding: 0.3rem 0.65rem;
+          border-radius: 8px;
+          background: rgba(56, 189, 248, 0.16);
+          border: 1px solid rgba(56, 189, 248, 0.35);
+          color: #7dd3fc;
+          font-size: 0.74rem;
+          font-weight: 600;
+        }
+        .reminder-chip-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.3rem;
+          padding: 0.3rem 0.58rem;
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: var(--muted);
+          font-size: 0.73rem;
+          font-weight: 600;
+          white-space: nowrap;
+          font-variant-numeric: tabular-nums;
+          transition: background 0.18s, border-color 0.18s, color 0.18s;
+        }
+        .reminder-chip-btn:hover {
+          color: var(--text);
+          border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+          background: rgba(255, 255, 255, 0.08);
+        }
+        .reminder-chip-btn.active {
+          color: var(--accent-2);
+          background: color-mix(in srgb, var(--accent) 16%, transparent);
+          border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+        }
+        .reminder-picker-row {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          padding: 0.55rem 1.25rem;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
+          background: rgba(0, 0, 0, 0.22);
+          flex-wrap: wrap;
+        }
+        .reminder-picker-label {
+          font-size: 0.74rem;
+          color: var(--muted);
+          white-space: nowrap;
+        }
+        .reminder-picker-row input[type='time'] {
+          flex: 1;
+          min-width: 105px;
+          background: rgba(0, 0, 0, 0.36);
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          border-radius: 8px;
+          padding: 0.28rem 0.5rem;
+          color: var(--text);
+          font-size: 0.78rem;
+          color-scheme: dark;
+          outline: none;
+        }
+        .reminder-picker-row input[type='time']:focus {
+          border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+        }
+        .reminder-save-btn {
+          padding: 0.3rem 0.65rem;
+          border-radius: 7px;
+          background: var(--accent);
+          color: #0a0014;
+          font-size: 0.74rem;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+        .reminder-off-btn,
+        .reminder-cancel-btn {
+          width: 26px;
+          height: 26px;
+          border-radius: 7px;
+          display: grid;
+          place-items: center;
+          color: var(--muted);
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .reminder-off-btn:hover {
+          color: #fca5a5;
+          border-color: rgba(248, 113, 113, 0.35);
+          background: rgba(248, 113, 113, 0.14);
+        }
+        .reminder-cancel-btn:hover {
+          color: var(--text);
+          background: rgba(255, 255, 255, 0.1);
+        }
+        .edit-reminder-row {
+          display: flex;
+          flex-direction: column;
+          gap: 0.3rem;
+        }
+        .edit-reminder-row label {
+          font-size: 0.72rem;
+          color: var(--muted);
+        }
+        .edit-reminder-controls {
+          display: flex;
+          align-items: center;
+          gap: 0.45rem;
+        }
+        .edit-reminder-controls input[type='time'] {
+          flex: 1;
+          color-scheme: dark;
+        }
+        .edit-clear-time {
+          padding: 0.36rem 0.6rem;
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.06);
+          color: var(--muted);
+          font-size: 0.74rem;
+        }
+        .edit-clear-time:hover {
+          color: var(--text);
+        }
+        .habit-notes-section {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          padding: 0.65rem 1.25rem 0.95rem;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
+          margin-top: auto;
+        }
+        .habit-notes-list {
+          list-style: none;
+          display: flex;
+          flex-direction: column;
+          gap: 0.35rem;
+          max-height: 112px;
+          overflow-y: auto;
+        }
+        .habit-notes-list li {
+          font-size: 0.77rem;
+          line-height: 1.35;
+          color: var(--text);
+          opacity: 0.88;
+          padding: 0.32rem 0.55rem;
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.04);
+          border-left: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+          word-break: break-word;
+        }
+        .notes-expand-btn {
+          align-self: flex-start;
+          font-size: 0.72rem;
+          color: var(--accent-2);
+          opacity: 0.85;
+        }
+        .notes-expand-btn:hover {
+          opacity: 1;
+          text-decoration: underline;
+        }
+        .habit-note-form {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+        }
+        .habit-note-form input {
+          flex: 1;
+          min-width: 0;
+          background: rgba(0, 0, 0, 0.32);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 8px;
+          padding: 0.38rem 0.65rem;
+          color: var(--text);
+          font-size: 0.78rem;
+          outline: none;
+          transition: border-color 0.18s;
+        }
+        .habit-note-form input::placeholder {
+          color: var(--muted);
+          opacity: 0.7;
+        }
+        .habit-note-form input:focus {
+          border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+        }
+        .note-submit-btn {
+          width: 28px;
+          height: 28px;
+          flex-shrink: 0;
+          border-radius: 8px;
+          display: grid;
+          place-items: center;
+          background: color-mix(in srgb, var(--accent) 22%, transparent);
+          border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+          color: var(--text);
+          transition: background 0.18s, opacity 0.18s;
+        }
+        .note-submit-btn:hover:not(:disabled) {
+          background: color-mix(in srgb, var(--accent) 36%, transparent);
+        }
+        .note-submit-btn:disabled {
+          opacity: 0.35;
+          cursor: not-allowed;
+        }
+        .habit-tags-section {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          padding: 0.65rem 1.25rem;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .habit-tags-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.35rem;
+        }
+        .habit-tag-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.25rem;
+          padding: 0.18rem 0.35rem 0.18rem 0.5rem;
+          border-radius: 7px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          font-size: 0.72rem;
+          color: var(--muted);
+          transition: border-color 0.18s, background 0.18s, color 0.18s;
+        }
+        .habit-tag-chip:hover,
+        .habit-tag-chip.selected {
+          background: color-mix(in srgb, var(--accent) 16%, transparent);
+          border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+          color: var(--text);
+        }
+        .habit-tag-label {
+          color: inherit;
+          font-size: inherit;
+          font-weight: 500;
+          line-height: 1.2;
+        }
+        .habit-tag-remove {
+          display: grid;
+          place-items: center;
+          width: 16px;
+          height: 16px;
+          border-radius: 4px;
+          color: var(--muted);
+          opacity: 0.75;
+          transition: opacity 0.15s, background 0.15s, color 0.15s;
+        }
+        .habit-tag-remove:hover {
+          opacity: 1;
+          background: rgba(255, 255, 255, 0.1);
+          color: var(--text);
+        }
+        .habit-tag-form {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          position: relative;
+        }
+        .tag-input-icon {
+          color: var(--muted);
+          opacity: 0.65;
+          flex-shrink: 0;
+        }
+        .habit-tag-form input {
+          flex: 1;
+          min-width: 0;
+          background: rgba(0, 0, 0, 0.28);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 8px;
+          padding: 0.34rem 0.6rem;
+          color: var(--text);
+          font-size: 0.76rem;
+          outline: none;
+          transition: border-color 0.18s;
+        }
+        .habit-tag-form input::placeholder {
+          color: var(--muted);
+          opacity: 0.7;
+        }
+        .habit-tag-form input:focus {
+          border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+        }
+        .tag-submit-btn {
+          width: 26px;
+          height: 26px;
+          flex-shrink: 0;
+          border-radius: 7px;
+          display: grid;
+          place-items: center;
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          color: var(--text);
+          transition: background 0.18s, border-color 0.18s, opacity 0.18s;
+        }
+        .tag-submit-btn:hover:not(:disabled) {
+          background: color-mix(in srgb, var(--accent) 26%, transparent);
+          border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+        }
+        .tag-submit-btn:disabled {
+          opacity: 0.35;
+          cursor: not-allowed;
+        }
+        .tag-filter-bar {
+          display: flex;
+          align-items: center;
+          gap: 0.65rem;
+          flex-wrap: wrap;
+        }
+        .tag-filter-heading {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          font-size: 0.78rem;
+          font-weight: 600;
+          color: var(--muted);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        .tag-filter-tabs {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          flex-wrap: wrap;
+        }
+        .tag-filter-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          padding: 0.32rem 0.68rem;
+          border-radius: 8px;
+          background: rgba(18, 15, 28, 0.55);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: var(--muted);
+          font-size: 0.78rem;
+          font-weight: 500;
+          transition: color 0.18s, border-color 0.18s, background 0.18s;
+        }
+        .tag-filter-btn:hover {
+          color: var(--text);
+          border-color: rgba(167, 139, 250, 0.35);
+        }
+        .tag-filter-btn.active {
+          color: var(--text);
+          background: rgba(167, 139, 250, 0.2);
+          border-color: rgba(167, 139, 250, 0.5);
+        }
+        .empty-state {
+          padding: 2rem;
+          text-align: center;
+          border-radius: 18px;
+          background: rgba(18, 15, 28, 0.55);
+          border: 1px dashed rgba(255, 255, 255, 0.12);
+          color: var(--muted);
+          font-size: 0.9rem;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.75rem;
+        }
+        .clear-filters-btn {
+          padding: 0.42rem 0.85rem;
+          border-radius: 9px;
+          background: rgba(167, 139, 250, 0.18);
+          border: 1px solid rgba(167, 139, 250, 0.4);
+          color: var(--accent-2);
+          font-size: 0.8rem;
+          font-weight: 600;
         }
       `}</style>
     </div>

@@ -1,0 +1,181 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Publicly non-sensitive root account anchor for a Maloxie user. Holds no PII.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the account owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name shown in greeting and account header.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the account document was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the account document was last updated."
+        }
+      },
+      "required": ["ownerId", "displayName", "createdAt", "updatedAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Isolated private PII record for a Maloxie user (Split Collection strategy).",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the account owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified user email address.",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Profile avatar URL from the OAuth provider.",
+          "maxLength": 512
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when private info was last updated."
+        }
+      },
+      "required": ["ownerId", "email", "photoURL", "updatedAt"]
+    },
+    "Habit": {
+      "title": "Habit",
+      "description": "A tracked daily habit belonging to an authenticated user.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the habit owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Habit title.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "category": {
+          "type": "string",
+          "description": "Habit category.",
+          "enum": ["Mindfulness", "Focus", "Fitness", "Reflection", "Other"],
+          "maxLength": 32
+        },
+        "streak": {
+          "type": "number",
+          "description": "Current consecutive day streak count (>= 0)."
+        },
+        "streakFreeze": {
+          "type": "number",
+          "description": "Available streak freeze tokens (>= 0)."
+        },
+        "frozenToday": {
+          "type": "boolean",
+          "description": "Whether a freeze token is active for today."
+        },
+        "completedToday": {
+          "type": "boolean",
+          "description": "Whether the habit has been completed today."
+        },
+        "history": {
+          "type": "array",
+          "description": "7-element boolean array representing the last 7 days."
+        },
+        "notes": {
+          "type": "array",
+          "description": "Bounded list of daily log strings (max 50 entries, <= 280 chars each)."
+        },
+        "tags": {
+          "type": "array",
+          "description": "Bounded list of custom tag strings (max 15 entries, <= 24 chars each)."
+        },
+        "lastActiveDate": {
+          "type": "string",
+          "description": "Local calendar date (YYYY-MM-DD) for automatic daily rollover.",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "reminderTime": {
+          "type": "string",
+          "description": "Optional daily local reminder time in 24h HH:mm format, or empty string when disabled.",
+          "maxLength": 5,
+          "pattern": "^$|^([01]\\d|2[0-3]):[0-5]\\d$"
+        },
+        "color": {
+          "type": "string",
+          "description": "Hex accent color for the habit card.",
+          "minLength": 7,
+          "maxLength": 7,
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the habit was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the habit was last updated."
+        }
+      },
+      "required": [
+        "ownerId",
+        "name",
+        "category",
+        "streak",
+        "streakFreeze",
+        "frozenToday",
+        "completedToday",
+        "history",
+        "notes",
+        "tags",
+        "lastActiveDate",
+        "color",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Root user account document anchoring ownership without exposing PII."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Owner-only private PII document (docId: info)."
+    },
+    "/users/{userId}/habits/{habitId}": {
+      "schema": { "$ref": "#/entities/Habit" },
+      "description": "User-scoped habits subcollection synchronized in real time."
+    }
+  }
+}

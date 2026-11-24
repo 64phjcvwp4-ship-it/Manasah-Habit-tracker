@@ -1,0 +1,304 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Shared Hardened Primitives ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isVerifiedOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUserAccount(data, userId) {
+      return data.keys().hasAll(['ownerId', 'displayName', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'displayName', 'createdAt', 'updatedAt'])
+        && data.ownerId is string
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.ownerId == userId
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 80
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivateInfo(data, userId) {
+      return data.keys().hasAll(['ownerId', 'email', 'photoURL', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'email', 'photoURL', 'updatedAt'])
+        && data.ownerId is string
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.ownerId == userId
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 254
+        && data.photoURL is string
+        && data.photoURL.size() <= 512
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidHabitCategory(category) {
+      return category in ['Mindfulness', 'Focus', 'Fitness', 'Reflection', 'Other'];
+    }
+
+    function isValidHistory(history) {
+      return history is list
+        && history.size() == 7
+        && history[0] is bool
+        && history[1] is bool
+        && history[2] is bool
+        && history[3] is bool
+        && history[4] is bool
+        && history[5] is bool
+        && history[6] is bool;
+    }
+
+    function isValidNotes(notes) {
+      return notes is list
+        && notes.size() <= 50
+        && (
+          notes.size() == 0
+          || (
+            notes[0] is string
+            && notes[0].size() >= 1
+            && notes[0].size() <= 280
+            && notes[notes.size() - 1] is string
+            && notes[notes.size() - 1].size() >= 1
+            && notes[notes.size() - 1].size() <= 280
+          )
+        );
+    }
+
+    function isValidTags(tags) {
+      return tags is list
+        && tags.size() <= 15
+        && (
+          tags.size() == 0
+          || (
+            tags[0] is string
+            && tags[0].size() >= 1
+            && tags[0].size() <= 24
+            && tags[tags.size() - 1] is string
+            && tags[tags.size() - 1].size() >= 1
+            && tags[tags.size() - 1].size() <= 24
+          )
+        );
+    }
+
+    function isValidDateKey(dateStr) {
+      return dateStr is string
+        && dateStr.size() == 10
+        && dateStr.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function isValidReminderTime(timeStr) {
+      return timeStr is string
+        && (
+          timeStr.size() == 0
+          || (timeStr.size() == 5 && timeStr.matches('^([01]\\d|2[0-3]):[0-5]\\d$'))
+        );
+    }
+
+    function isValidHabit(data, userId) {
+      return data.keys().hasAll([
+          'ownerId', 'name', 'category', 'streak', 'streakFreeze',
+          'frozenToday', 'completedToday', 'history', 'notes', 'color',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'name', 'category', 'streak', 'streakFreeze',
+          'frozenToday', 'completedToday', 'history', 'notes', 'tags', 'lastActiveDate', 'reminderTime', 'color',
+          'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.ownerId == userId
+        && data.name is string
+        && data.name.size() >= 1
+        && data.name.size() <= 80
+        && data.category is string
+        && data.category.size() <= 32
+        && isValidHabitCategory(data.category)
+        && data.streak is int
+        && data.streak >= 0
+        && data.streak <= 10000
+        && data.streakFreeze is int
+        && data.streakFreeze >= 0
+        && data.streakFreeze <= 10
+        && data.frozenToday is bool
+        && data.completedToday is bool
+        && isValidHistory(data.history)
+        && isValidNotes(data.notes)
+        && (!('tags' in data.keys()) || isValidTags(data.tags))
+        && (!('lastActiveDate' in data.keys()) || isValidDateKey(data.lastActiveDate))
+        && (!('reminderTime' in data.keys()) || isValidReminderTime(data.reminderTime))
+        && data.color is string
+        && data.color.size() == 7
+        && data.color.matches('^#[0-9a-fA-F]{6}$')
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Master Gate helper for subcollections under /users/{userId}
+    function hasValidParentAccount(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId))
+        && get(/databases/$(database)/documents/users/$(userId)).data.ownerId == request.auth.uid;
+    }
+
+    // --- Collection Rules ---
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+
+      allow create: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && isValidUserAccount(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && isValidUserAccount(incoming(), userId)
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt']);
+
+      allow delete: if false;
+
+      // Split Collection: Private PII (email, photoURL)
+      match /private/{docId} {
+        allow get: if isValidId(userId) && isValidId(docId) && docId == 'info' && isOwner(userId);
+        allow list: if false;
+
+        allow create: if isVerifiedOwner(userId)
+          && isValidId(userId)
+          && docId == 'info'
+          && isValidUserPrivateInfo(incoming(), userId)
+          && incoming().updatedAt == request.time
+          && hasValidParentAccount(userId);
+
+        allow update: if isVerifiedOwner(userId)
+          && isValidId(userId)
+          && docId == 'info'
+          && isValidUserPrivateInfo(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'photoURL', 'updatedAt'])
+          && hasValidParentAccount(userId);
+
+        allow delete: if false;
+      }
+
+      // User Habits Subcollection
+      match /habits/{habitId} {
+        allow get: if isValidId(userId) && isValidId(habitId) && isOwner(userId);
+        allow list: if isSignedIn() && request.auth.uid == userId && existing().ownerId == request.auth.uid;
+
+        allow create: if isVerifiedOwner(userId)
+          && isValidId(userId)
+          && isValidId(habitId)
+          && isValidHabit(incoming(), userId)
+          && 'tags' in incoming().keys()
+          && isValidTags(incoming().tags)
+          && 'lastActiveDate' in incoming().keys()
+          && isValidDateKey(incoming().lastActiveDate)
+          && incoming().streakFreeze <= 2
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasValidParentAccount(userId);
+
+        allow update: if isVerifiedOwner(userId)
+          && isValidId(userId)
+          && isValidId(habitId)
+          && isValidHabit(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            // Action 1: Toggle daily completion
+            (
+              incoming().diff(existing()).affectedKeys().hasOnly(['completedToday', 'frozenToday', 'streak', 'history', 'updatedAt'])
+              && (
+                (incoming().completedToday == true && existing().completedToday == false && incoming().streak == existing().streak + 1)
+                || (incoming().completedToday == false && existing().completedToday == true && (incoming().streak == existing().streak - 1 || (existing().streak == 0 && incoming().streak == 0)))
+              )
+            )
+            // Action 2: Use streak freeze token
+            || (
+              incoming().diff(existing()).affectedKeys().hasOnly(['streakFreeze', 'frozenToday', 'updatedAt'])
+              && existing().completedToday == false
+              && existing().frozenToday == false
+              && existing().streakFreeze > 0
+              && incoming().streakFreeze == existing().streakFreeze - 1
+              && incoming().frozenToday == true
+            )
+            // Action 3: Append daily note
+            || (
+              incoming().diff(existing()).affectedKeys().hasOnly(['notes', 'updatedAt'])
+              && incoming().notes.size() == existing().notes.size() + 1
+            )
+            // Action 4: Update custom tags
+            || (
+              incoming().diff(existing()).affectedKeys().hasOnly(['tags', 'updatedAt'])
+              && 'tags' in incoming().keys()
+              && isValidTags(incoming().tags)
+            )
+            // Action 5: Edit habit metadata
+            || incoming().diff(existing()).affectedKeys().hasOnly(['name', 'category', 'color', 'reminderTime', 'updatedAt'])
+            // Action 6: Automatic calendar-day rollover (cannot inflate streak)
+            || (
+              incoming().diff(existing()).affectedKeys().hasOnly(['completedToday', 'frozenToday', 'streak', 'history', 'lastActiveDate', 'updatedAt'])
+              && 'lastActiveDate' in incoming().keys()
+              && isValidDateKey(incoming().lastActiveDate)
+              && incoming().completedToday == false
+              && incoming().frozenToday == false
+              && incoming().streak <= existing().streak
+            )
+            // Action 7: Update daily reminder time
+            || (
+              incoming().diff(existing()).affectedKeys().hasOnly(['reminderTime', 'updatedAt'])
+              && 'reminderTime' in incoming().keys()
+              && isValidReminderTime(incoming().reminderTime)
+            )
+          )
+          && hasValidParentAccount(userId);
+
+        allow delete: if isVerifiedOwner(userId)
+          && isValidId(userId)
+          && isValidId(habitId)
+          && hasValidParentAccount(userId);
+      }
+    }
+  }
+}

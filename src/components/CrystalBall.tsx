@@ -1,71 +1,164 @@
 import { useState, useRef, useEffect } from 'react'
-import type { Habit } from '../App'
-import { Send, X, Sparkles } from 'lucide-react'
+import { generateHabitCoachReply } from '../lib/habitCoach'
+import type { Habit } from '../lib/habits'
+import { useAuth } from '../contexts/AuthContext'
+import { Send, X, Sparkles, RotateCcw } from 'lucide-react'
+import Strands from './Strands.jsx'
 
-/** Strands / crystal-ball inspired AI orb + chat panel.
- *  Wire this to your free LLM API later. */
+interface ChatMessage {
+  role: 'user' | 'ai'
+  text: string
+  isError?: boolean
+}
+
+const WELCOME_MESSAGE: ChatMessage = {
+  role: 'ai',
+  text: "Hey, I'm Maloxie. Ask me about your habits, streaks, tags, or reminders—everything runs right off your live tracker data.",
+}
+
+const QUICK_PROMPTS = [
+  'Review my week',
+  'Protect my streaks',
+  'Where am I slipping?',
+  'What to focus on today?',
+]
+
+function loadChatHistory(storageKey: string): ChatMessage[] {
+  try {
+    const raw = localStorage.getItem(storageKey)
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const clean = parsed
+          .filter((m): m is ChatMessage => Boolean(m && typeof m === 'object' && typeof m.text === 'string'))
+          .map(m => ({
+            role: (m.role === 'user' ? 'user' : 'ai') as 'user' | 'ai',
+            text: m.text,
+          }))
+          .slice(-30)
+        if (clean.length > 0) return clean
+      }
+    }
+  } catch {
+    // ignore corrupted chat history
+  }
+  return [WELCOME_MESSAGE]
+}
+
 export function CrystalBall({
   open,
   onClose,
+  onOpen,
   habits,
 }: {
   open: boolean
   onClose: () => void
+  onOpen?: () => void
   habits: Habit[]
 }) {
-  const [messages, setMessages] = useState<{ role: 'user' | 'ai'; text: string }[]>([
-    {
-      role: 'ai',
-      text: "Hey, I'm Moxie. Ask me about your habits, streaks, or how to stay consistent. What are you working on?",
-    },
-  ])
+  const { user } = useAuth()
+  const storageKey = `maloxie-chat-${user?.uid || 'guest'}`
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadChatHistory(storageKey))
   const [input, setInput] = useState('')
   const [listening, setListening] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    setMessages(loadChatHistory(storageKey))
+  }, [storageKey])
 
-  const send = async () => {
-    if (!input.trim()) return
-    const userMsg = input.trim()
+  useEffect(() => {
+    try {
+      const toStore = messages.filter(m => !m.isError).slice(-30)
+      localStorage.setItem(storageKey, JSON.stringify(toStore))
+    } catch {
+      // ignore storage failures
+    }
+  }, [messages, storageKey])
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, listening])
+
+  const sendMessage = async (rawText: string) => {
+    const userMsg = rawText.trim()
+    if (!userMsg || listening) return
+
     setInput('')
     setMessages(m => [...m, { role: 'user', text: userMsg }])
     setListening(true)
 
-    // Simulated response — replace with real free LLM call
-    await new Promise(r => setTimeout(r, 900 + Math.random() * 600))
-    const reply = generateReply(userMsg, habits)
-    setMessages(m => [...m, { role: 'ai', text: reply }])
+    await new Promise(resolve => setTimeout(resolve, 220))
+    const replyText = generateHabitCoachReply(userMsg, habits)
+    setMessages(m => [...m, { role: 'ai', text: replyText }])
     setListening(false)
+  }
+
+  const clearChat = () => {
+    setMessages([WELCOME_MESSAGE])
+    try {
+      localStorage.removeItem(storageKey)
+    } catch {
+      // ignore
+    }
   }
 
   return (
     <div className="crystal-wrap">
-      {/* Visual orb */}
-      <div className={`orb ${listening ? 'pulse' : ''}`}>
-        <div className="orb-core" />
-        <div className="orb-ring r1" />
-        <div className="orb-ring r2" />
-        <div className="orb-ring r3" />
+      {/* Strands AI orb */}
+      <div
+        className="orb-shell"
+        onClick={() => (open ? onClose() : onOpen?.())}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            open ? onClose() : onOpen?.()
+          }
+        }}
+        aria-label={open ? 'Close Maloxie AI chat' : 'Open Maloxie AI chat'}
+      >
+        <div style={{ width: 220, height: 220, position: 'relative' }}>
+          <Strands
+            listening={listening}
+            level={undefined}
+            glass
+            energy={0.65}
+            colors={['#d95b56', '#ba5046', '#ffa24c', '#ffe0b3', '#93f1ff', '#3569fa', '#193d9b']}
+            interactive
+            clickPulse
+            intro
+            style={undefined}
+          />
+        </div>
         <div className="orb-label">
           <Sparkles size={14} />
-          Moxie AI
+          Maloxie Coach
         </div>
       </div>
 
       {/* Chat panel */}
       <div className={`chat-panel glass ${open ? 'open' : ''}`}>
         <div className="chat-head">
-          <span>Moxie AI</span>
-          <button onClick={onClose} aria-label="Close">
-            <X size={18} />
-          </button>
+          <span>Maloxie Habit Coach</span>
+          <div className="chat-head-actions">
+            <button
+              type="button"
+              onClick={clearChat}
+              aria-label="Reset conversation"
+              title="Reset conversation"
+            >
+              <RotateCcw size={15} />
+            </button>
+            <button type="button" onClick={onClose} aria-label="Close">
+              <X size={18} />
+            </button>
+          </div>
         </div>
         <div className="chat-body">
           {messages.map((m, i) => (
-            <div key={i} className={`bubble ${m.role}`}>
+            <div key={i} className={`bubble ${m.role} ${m.isError ? 'error' : ''}`}>
               {m.text}
             </div>
           ))}
@@ -76,21 +169,35 @@ export function CrystalBall({
           )}
           <div ref={endRef} />
         </div>
+        <div className="chat-quick-prompts">
+          {QUICK_PROMPTS.map(prompt => (
+            <button
+              key={prompt}
+              type="button"
+              className="quick-prompt-btn"
+              disabled={listening}
+              onClick={() => void sendMessage(prompt)}
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
         <div className="chat-input">
           <input
             value={input}
+            maxLength={1000}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && send()}
+            onKeyDown={e => e.key === 'Enter' && void sendMessage(input)}
             placeholder="Ask about your habits…"
           />
-          <button onClick={send} disabled={!input.trim() || listening}>
+          <button type="button" onClick={() => void sendMessage(input)} disabled={!input.trim() || listening}>
             <Send size={16} />
           </button>
         </div>
       </div>
 
       {!open && (
-        <p className="orb-hint">Click “Ask Moxie” in the nav or the orb to open chat</p>
+        <p className="orb-hint">Click “Ask Maloxie” in the nav or the orb to open chat</p>
       )}
 
       <style>{`
@@ -101,40 +208,16 @@ export function CrystalBall({
           gap: 1.5rem;
           position: relative;
         }
-        .orb {
-          width: 180px;
-          height: 180px;
+        .orb-shell {
           position: relative;
-          display: grid;
-          place-items: center;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
           cursor: pointer;
+          outline: none;
         }
-        .orb-core {
-          width: 70px;
-          height: 70px;
-          border-radius: 50%;
-          background: radial-gradient(circle at 35% 30%, #e9d5ff, #a78bfa 45%, #5b21b6 90%);
-          box-shadow:
-            0 0 40px rgba(167,139,250,0.55),
-            0 0 80px rgba(167,139,250,0.25),
-            inset 0 0 20px rgba(255,255,255,0.3);
-          z-index: 2;
-        }
-        .orb.pulse .orb-core {
-          animation: corePulse 1.2s ease-in-out infinite;
-        }
-        .orb-ring {
-          position: absolute;
-          border-radius: 50%;
-          border: 1.5px solid rgba(196,181,253,0.25);
-          animation: spin 12s linear infinite;
-        }
-        .r1 { width: 100px; height: 100px; animation-duration: 8s; }
-        .r2 { width: 130px; height: 130px; animation-duration: 14s; animation-direction: reverse; border-color: rgba(244,114,182,0.2); }
-        .r3 { width: 160px; height: 160px; animation-duration: 20s; border-style: dashed; border-color: rgba(167,139,250,0.15); }
         .orb-label {
-          position: absolute;
-          bottom: -28px;
+          margin-top: -10px;
           display: flex;
           align-items: center;
           gap: 0.35rem;
@@ -144,17 +227,12 @@ export function CrystalBall({
         .orb-hint {
           font-size: 0.85rem;
           color: var(--muted);
-          margin-top: 1.5rem;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes corePulse {
-          0%, 100% { transform: scale(1); box-shadow: 0 0 40px rgba(167,139,250,0.55); }
-          50% { transform: scale(1.08); box-shadow: 0 0 60px rgba(167,139,250,0.75); }
+          margin-top: 0.25rem;
         }
 
         .chat-panel {
           width: 100%;
-          max-width: 480px;
+          max-width: 500px;
           height: 0;
           overflow: hidden;
           opacity: 0;
@@ -163,9 +241,9 @@ export function CrystalBall({
           flex-direction: column;
         }
         .chat-panel.open {
-          height: 420px;
+          height: 450px;
           opacity: 1;
-          margin-top: 1rem;
+          margin-top: 0.5rem;
         }
         .chat-head {
           display: flex;
@@ -175,9 +253,14 @@ export function CrystalBall({
           border-bottom: 1px solid var(--border);
           font-weight: 600;
         }
+        .chat-head-actions {
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+        }
         .chat-head button {
           color: var(--muted);
-          padding: 4px;
+          padding: 5px;
           border-radius: 6px;
         }
         .chat-head button:hover { color: var(--text); background: rgba(255,255,255,0.06); }
@@ -194,7 +277,8 @@ export function CrystalBall({
           padding: 0.7rem 1rem;
           border-radius: 16px;
           font-size: 0.9rem;
-          line-height: 1.45;
+          line-height: 1.48;
+          white-space: pre-wrap;
         }
         .bubble.user {
           align-self: flex-end;
@@ -205,6 +289,11 @@ export function CrystalBall({
           align-self: flex-start;
           background: rgba(255,255,255,0.05);
           border: 1px solid rgba(255,255,255,0.08);
+        }
+        .bubble.ai.error {
+          background: rgba(248, 113, 113, 0.14);
+          border-color: rgba(248, 113, 113, 0.35);
+          color: #fecaca;
         }
         .bubble.typing {
           display: flex;
@@ -224,10 +313,29 @@ export function CrystalBall({
           0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
           40% { transform: translateY(-5px); opacity: 1; }
         }
+        .chat-quick-prompts {
+          display: flex;
+          gap: 0.4rem;
+          padding: 0.45rem 1rem 0.15rem;
+          flex-wrap: wrap;
+        }
+        .quick-prompt-btn {
+          padding: 0.28rem 0.6rem;
+          border-radius: 8px;
+          background: rgba(167, 139, 250, 0.12);
+          border: 1px solid rgba(167, 139, 250, 0.25);
+          color: var(--accent-2);
+          font-size: 0.75rem;
+          font-weight: 500;
+          transition: background 0.18s;
+        }
+        .quick-prompt-btn:hover:not(:disabled) {
+          background: rgba(167, 139, 250, 0.24);
+        }
         .chat-input {
           display: flex;
           gap: 0.5rem;
-          padding: 0.75rem 1rem 1rem;
+          padding: 0.65rem 1rem 1rem;
           border-top: 1px solid var(--border);
         }
         .chat-input input {
@@ -260,28 +368,4 @@ export function CrystalBall({
       `}</style>
     </div>
   )
-}
-
-function generateReply(q: string, habits: Habit[]): string {
-  const lower = q.toLowerCase()
-  const total = habits.reduce((s, h) => s + h.streak, 0)
-  const best = [...habits].sort((a, b) => b.streak - a.streak)[0]
-  const pending = habits.filter(h => !h.completedToday)
-
-  if (lower.includes('streak') || lower.includes('best')) {
-    return best
-      ? `Your strongest habit right now is “${best.name}” at ${best.streak} days. Across everything you’ve logged ${total} streak days. That’s real momentum.`
-      : `You haven’t built a streak yet — pick one habit and protect it for the next 7 days.`
-  }
-  if (lower.includes('today') || lower.includes('left') || lower.includes('remaining')) {
-    if (pending.length === 0) return `You’ve crushed everything for today. Rest or stack a bonus habit if you feel it.`
-    return `Still open today: ${pending.map(h => h.name).join(', ')}. One at a time is enough.`
-  }
-  if (lower.includes('help') || lower.includes('stuck') || lower.includes('motivat')) {
-    return `When motivation dips, shrink the habit. Do the 2-minute version. Showing up is the win — the intensity can return later.`
-  }
-  if (lower.includes('add') || lower.includes('new')) {
-    return `New habits stick best when they’re attached to something you already do. After coffee → 5 minutes of X. Keep the bar ridiculously low at first.`
-  }
-  return `You’re tracking ${habits.length} habits with a combined ${total} streak days. Focus on the next small win rather than the whole week. What feels hardest right now?`
 }
