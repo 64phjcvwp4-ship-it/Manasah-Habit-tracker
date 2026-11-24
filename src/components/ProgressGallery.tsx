@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import type { Habit } from '../App'
+import { useTheme, type ThemeMode } from '../contexts/ThemeContext'
 import AccordionGallery from './AccordionGallery.jsx'
 import { WeeklySummary } from './WeeklySummary'
 
@@ -20,21 +21,29 @@ function escapeXml(str: string): string {
     .replace(/'/g, '&apos;')
 }
 
-function buildHabitCardSvg(habit: Habit): string {
+function buildHabitCardSvg(habit: Habit, theme: ThemeMode): string {
   const days = getLast7DayLabels()
   const doneCount = habit.history.filter(Boolean).length
   const pct = Math.round((doneCount / habit.history.length) * 100)
+  const isLight = theme === 'light'
+
+  const bgTop = isLight ? '#ffffff' : '#140f24'
+  const bgBottom = isLight ? '#efeafd' : '#070311'
+  const textPrimary = isLight ? '#151024' : '#f4f0ff'
+  const textMuted = isLight ? '#5a4f73' : '#a89bbf'
+  const divider = isLight ? 'rgba(24,16,48,0.1)' : 'rgba(255,255,255,0.08)'
+  const barEmpty = isLight ? 'rgba(24,16,48,0.12)' : 'rgba(255,255,255,0.14)'
 
   const bars = habit.history
     .map((done, idx) => {
       const x = 60 + idx * 54
       const h = done ? 110 : 32
       const y = 410 - h
-      const fill = done ? habit.color : 'rgba(255,255,255,0.14)'
-      const opacity = done ? '0.95' : '0.6'
+      const fill = done ? habit.color : barEmpty
+      const opacity = done ? '0.95' : '0.65'
       return `
         <rect x="${x}" y="${y}" width="32" height="${h}" rx="8" fill="${fill}" opacity="${opacity}" />
-        <text x="${x + 16}" y="442" text-anchor="middle" fill="#a89bbf" font-family="Inter, system-ui, sans-serif" font-size="13" font-weight="600">${escapeXml(days[idx].short)}</text>
+        <text x="${x + 16}" y="442" text-anchor="middle" fill="${textMuted}" font-family="Inter, system-ui, sans-serif" font-size="13" font-weight="600">${escapeXml(days[idx].short)}</text>
       `
     })
     .join('')
@@ -42,23 +51,23 @@ function buildHabitCardSvg(habit: Habit): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 600" width="480" height="600">
     <defs>
       <radialGradient id="glow" cx="50%" cy="28%" r="65%">
-        <stop offset="0%" stop-color="${habit.color}" stop-opacity="0.38" />
-        <stop offset="55%" stop-color="${habit.color}" stop-opacity="0.08" />
-        <stop offset="100%" stop-color="#0a0616" stop-opacity="0" />
+        <stop offset="0%" stop-color="${habit.color}" stop-opacity="${isLight ? '0.24' : '0.38'}" />
+        <stop offset="55%" stop-color="${habit.color}" stop-opacity="0.06" />
+        <stop offset="100%" stop-color="${bgBottom}" stop-opacity="0" />
       </radialGradient>
       <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#140f24" />
-        <stop offset="100%" stop-color="#070311" />
+        <stop offset="0%" stop-color="${bgTop}" />
+        <stop offset="100%" stop-color="${bgBottom}" />
       </linearGradient>
     </defs>
     <rect width="480" height="600" fill="url(#bg)" />
     <rect width="480" height="600" fill="url(#glow)" />
     <text x="60" y="96" fill="${habit.color}" font-family="Inter, system-ui, sans-serif" font-size="15" font-weight="600" letter-spacing="2">7-DAY CONSISTENCY</text>
-    <text x="60" y="196" fill="#f4f0ff" font-family="Space Grotesk, system-ui, sans-serif" font-size="96" font-weight="700">${habit.streak}</text>
-    <text x="60" y="234" fill="#a89bbf" font-family="Inter, system-ui, sans-serif" font-size="22" font-weight="500">day streak · ${pct}% this week</text>
-    <line x1="60" y1="270" x2="420" y2="270" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
+    <text x="60" y="196" fill="${textPrimary}" font-family="Space Grotesk, system-ui, sans-serif" font-size="96" font-weight="700">${habit.streak}</text>
+    <text x="60" y="234" fill="${textMuted}" font-family="Inter, system-ui, sans-serif" font-size="22" font-weight="500">day streak · ${pct}% this week</text>
+    <line x1="60" y1="270" x2="420" y2="270" stroke="${divider}" stroke-width="1" />
     ${bars}
-    <text x="60" y="510" fill="#f4f0ff" font-family="Space Grotesk, system-ui, sans-serif" font-size="22" font-weight="600">${escapeXml(habit.name)}</text>
+    <text x="60" y="510" fill="${textPrimary}" font-family="Space Grotesk, system-ui, sans-serif" font-size="22" font-weight="600">${escapeXml(habit.name)}</text>
   </svg>`
 
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
@@ -86,7 +95,15 @@ type DayPoint = {
   completed: boolean
 }
 
-function HabitWeeklyChart({ habit, dayLabels }: { habit: Habit; dayLabels: { short: string; full: string }[] }) {
+function HabitWeeklyChart({
+  habit,
+  dayLabels,
+  theme,
+}: {
+  habit: Habit
+  dayLabels: { short: string; full: string }[]
+  theme: ThemeMode
+}) {
   const data: DayPoint[] = useMemo(
     () =>
       habit.history.map((done, idx) => ({
@@ -100,6 +117,10 @@ function HabitWeeklyChart({ habit, dayLabels }: { habit: Habit; dayLabels: { sho
 
   const doneCount = habit.history.filter(Boolean).length
   const consistency = Math.round((doneCount / habit.history.length) * 100)
+  const isLight = theme === 'light'
+  const tickColor = isLight ? '#5a4f73' : '#a89bbf'
+  const emptyBar = isLight ? 'rgba(24, 16, 48, 0.12)' : 'rgba(255, 255, 255, 0.12)'
+  const cursorColor = isLight ? 'rgba(24, 16, 48, 0.05)' : 'rgba(255, 255, 255, 0.04)'
 
   return (
     <div
@@ -127,17 +148,17 @@ function HabitWeeklyChart({ habit, dayLabels }: { habit: Habit; dayLabels: { sho
               axisLine={false}
               tickLine={false}
               interval={0}
-              tick={{ fill: '#a89bbf', fontSize: 11, fontWeight: 500 }}
+              tick={{ fill: tickColor, fontSize: 11, fontWeight: 500 }}
             />
             <Tooltip
-              cursor={{ fill: 'rgba(255, 255, 255, 0.04)', radius: 6 }}
+              cursor={{ fill: cursorColor, radius: 6 }}
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null
                 const point = payload[0].payload as DayPoint
                 return (
                   <div className="weekly-tooltip">
                     <strong>{point.fullDay}</strong>
-                    <span style={{ color: point.completed ? habit.color : '#a89bbf' }}>
+                    <span style={{ color: point.completed ? habit.color : tickColor }}>
                       {point.completed ? 'Completed' : 'Missed'}
                     </span>
                   </div>
@@ -148,7 +169,7 @@ function HabitWeeklyChart({ habit, dayLabels }: { habit: Habit; dayLabels: { sho
               {data.map((entry, idx) => (
                 <Cell
                   key={idx}
-                  fill={entry.completed ? habit.color : 'rgba(255, 255, 255, 0.12)'}
+                  fill={entry.completed ? habit.color : emptyBar}
                   fillOpacity={entry.completed ? 0.92 : 1}
                 />
               ))}
@@ -161,17 +182,19 @@ function HabitWeeklyChart({ habit, dayLabels }: { habit: Habit; dayLabels: { sho
 }
 
 export function ProgressGallery({ habits }: { habits: Habit[] }) {
+  const { theme } = useTheme()
   const dayLabels = useMemo(() => getLast7DayLabels(), [])
+  const isLight = theme === 'light'
 
   const items = useMemo(
     () =>
       habits.map(h => ({
-        image: buildHabitCardSvg(h),
+        image: buildHabitCardSvg(h, theme),
         label: `${h.name} · ${h.streak}d`,
         link: '',
         alt: `${h.name} habit progress: ${h.streak} day streak`,
       })),
-    [habits]
+    [habits, theme]
   )
 
   if (items.length === 0) return null
@@ -182,9 +205,9 @@ export function ProgressGallery({ habits }: { habits: Habit[] }) {
       <AccordionGallery
         items={items}
         defaultIndex={0}
-        accentColor="#a78bfa"
-        overlayColor="#060010"
-        textColor="#f4f0ff"
+        accentColor={isLight ? '#7c3aed' : '#a78bfa'}
+        overlayColor={isLight ? '#efeafd' : '#060010'}
+        textColor={isLight ? '#151024' : '#f4f0ff'}
         height={320}
         gap={10}
         radius={18}
@@ -201,7 +224,7 @@ export function ProgressGallery({ habits }: { habits: Habit[] }) {
         </div>
         <div className="weekly-charts-grid">
           {habits.map(habit => (
-            <HabitWeeklyChart key={habit.id} habit={habit} dayLabels={dayLabels} />
+            <HabitWeeklyChart key={habit.id} habit={habit} dayLabels={dayLabels} theme={theme} />
           ))}
         </div>
       </div>
@@ -240,8 +263,8 @@ export function ProgressGallery({ habits }: { habits: Habit[] }) {
         .weekly-chart-card {
           padding: 1.05rem 1.15rem 0.9rem;
           border-radius: 18px;
-          background: rgba(18, 15, 28, 0.7);
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: var(--surface-card);
+          border: 1px solid var(--border);
           backdrop-filter: blur(12px);
           -webkit-backdrop-filter: blur(12px);
           transition: border-color 0.2s, transform 0.2s;
@@ -284,6 +307,7 @@ export function ProgressGallery({ habits }: { habits: Habit[] }) {
           font-weight: 600;
           color: var(--habit-accent);
           flex-shrink: 0;
+          font-variant-numeric: tabular-nums;
         }
         .weekly-chart-meta {
           display: flex;
@@ -291,6 +315,7 @@ export function ProgressGallery({ habits }: { habits: Habit[] }) {
           font-size: 0.76rem;
           color: var(--muted);
           margin-bottom: 0.35rem;
+          font-variant-numeric: tabular-nums;
         }
         .weekly-chart-canvas {
           width: 100%;
@@ -299,13 +324,13 @@ export function ProgressGallery({ habits }: { habits: Habit[] }) {
         .weekly-tooltip {
           padding: 0.45rem 0.65rem;
           border-radius: 10px;
-          background: rgba(12, 8, 22, 0.94);
-          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: var(--dropdown-bg);
+          border: 1px solid var(--border-strong);
           display: flex;
           flex-direction: column;
           gap: 0.15rem;
           font-size: 0.76rem;
-          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+          box-shadow: var(--shadow-overlay);
         }
         .weekly-tooltip strong {
           color: var(--text);

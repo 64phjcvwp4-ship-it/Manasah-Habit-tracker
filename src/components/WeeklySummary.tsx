@@ -117,8 +117,8 @@ export function WeeklySummary({ habits }: { habits: Habit[] }) {
           display: flex;
           flex-direction: column;
           gap: 0.55rem;
-          background: rgba(18, 15, 28, 0.72);
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: var(--surface-card);
+          border: 1px solid var(--border);
         }
         .summary-top {
           display: flex;
@@ -134,8 +134,7 @@ export function WeeklySummary({ habits }: { habits: Habit[] }) {
           font-size: 0.8rem;
           font-weight: 600;
           color: var(--accent-2);
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
+          letter-spacing: 0.02em;
         }
         .summary-label.top-label {
           color: var(--top-accent);
@@ -143,6 +142,7 @@ export function WeeklySummary({ habits }: { habits: Habit[] }) {
         .summary-meta {
           font-size: 0.78rem;
           color: var(--muted);
+          font-variant-numeric: tabular-nums;
         }
         .summary-value {
           font-family: 'Space Grotesk', sans-serif;
@@ -150,19 +150,20 @@ export function WeeklySummary({ habits }: { habits: Habit[] }) {
           font-weight: 700;
           line-height: 1.1;
           color: var(--text);
+          font-variant-numeric: tabular-nums;
         }
         .summary-bar {
           width: 100%;
           height: 6px;
           border-radius: 999px;
-          background: rgba(255, 255, 255, 0.08);
+          background: var(--dot-empty);
           overflow: hidden;
           margin-top: 0.15rem;
         }
         .summary-bar-fill {
           height: 100%;
           border-radius: 999px;
-          background: linear-gradient(90deg, #a78bfa, #f0abfc);
+          background: linear-gradient(90deg, var(--accent), #ec4899);
           transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
         }
         .summary-top-habit {
@@ -195,6 +196,7 @@ export function WeeklySummary({ habits }: { habits: Habit[] }) {
           font-weight: 700;
           color: var(--top-accent);
           flex-shrink: 0;
+          font-variant-numeric: tabular-nums;
         }
       `}</style>
     </div>

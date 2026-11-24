@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, Cloud, LogIn, LogOut, User as UserIcon } from 'lucide-react'
+import { ChevronDown, Cloud, LogIn, LogOut, Moon, Sun, User as UserIcon } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 
 export function AccountMenu({
   habitCount,
@@ -12,6 +13,7 @@ export function AccountMenu({
   isCloudMode: boolean
 }) {
   const { user, authReady, signingIn, signInWithGoogle, signOutUser } = useAuth()
+  const { theme, setTheme } = useTheme()
   const [open, setOpen] = useState(false)
   const [imgError, setImgError] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -46,7 +48,7 @@ export function AccountMenu({
             width: 96px;
             height: 36px;
             border-radius: 12px;
-            background: rgba(255, 255, 255, 0.06);
+            background: var(--surface-subtle);
           }
         `}</style>
       </div>
@@ -70,16 +72,17 @@ export function AccountMenu({
             gap: 0.45rem;
             padding: 0.5rem 0.9rem;
             border-radius: 12px;
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: var(--surface);
+            border: 1px solid var(--border-strong);
             color: var(--text);
             font-size: 0.85rem;
             font-weight: 500;
+            white-space: nowrap;
             transition: background 0.18s, border-color 0.18s, transform 0.15s;
           }
           .account-signin-btn:hover:not(:disabled) {
-            background: rgba(167, 139, 250, 0.16);
-            border-color: rgba(167, 139, 250, 0.42);
+            background: color-mix(in srgb, var(--accent) 14%, transparent);
+            border-color: color-mix(in srgb, var(--accent) 42%, transparent);
             transform: translateY(-1px);
           }
           .account-signin-btn:disabled {
@@ -150,6 +153,30 @@ export function AccountMenu({
             </div>
           </div>
 
+          <div className="account-theme-row" role="group" aria-label="Appearance theme">
+            <span>Theme</span>
+            <div className="account-theme-pills">
+              <button
+                type="button"
+                className={theme === 'light' ? 'active' : ''}
+                aria-pressed={theme === 'light'}
+                onClick={() => setTheme('light')}
+              >
+                <Sun size={12} />
+                Light
+              </button>
+              <button
+                type="button"
+                className={theme === 'dark' ? 'active' : ''}
+                aria-pressed={theme === 'dark'}
+                onClick={() => setTheme('dark')}
+              >
+                <Moon size={12} />
+                Dark
+              </button>
+            </div>
+          </div>
+
           <button
             type="button"
             role="menuitem"
@@ -175,16 +202,17 @@ export function AccountMenu({
           gap: 0.5rem;
           padding: 0.35rem 0.65rem 0.35rem 0.4rem;
           border-radius: 12px;
-          background: rgba(18, 15, 28, 0.78);
-          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: var(--surface);
+          border: 1px solid var(--border-strong);
           color: var(--text);
           font-size: 0.84rem;
           font-weight: 500;
+          white-space: nowrap;
           transition: border-color 0.18s, background 0.18s;
         }
         .account-trigger:hover {
-          border-color: rgba(167, 139, 250, 0.45);
-          background: rgba(28, 22, 44, 0.9);
+          border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+          background: var(--surface-hover);
         }
         .account-avatar,
         .account-avatar-fallback {
@@ -197,7 +225,7 @@ export function AccountMenu({
         .account-avatar-fallback {
           display: grid;
           place-items: center;
-          background: rgba(167, 139, 250, 0.25);
+          background: color-mix(in srgb, var(--accent) 22%, transparent);
           color: var(--accent-2);
           font-size: 0.72rem;
           font-weight: 700;
@@ -215,8 +243,8 @@ export function AccountMenu({
           flex-shrink: 0;
         }
         .sync-dot.online {
-          background: #34d399;
-          box-shadow: 0 0 8px rgba(52, 211, 153, 0.65);
+          background: var(--success);
+          box-shadow: 0 0 8px color-mix(in srgb, var(--success) 60%, transparent);
         }
         .sync-dot.syncing {
           background: #fbbf24;
@@ -235,10 +263,10 @@ export function AccountMenu({
           width: 248px;
           padding: 0.85rem;
           border-radius: 16px;
-          background: rgba(14, 10, 26, 0.96);
-          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: var(--dropdown-bg);
+          border: 1px solid var(--border-strong);
           backdrop-filter: blur(16px);
-          box-shadow: 0 20px 44px rgba(0, 0, 0, 0.55);
+          box-shadow: var(--shadow-overlay);
           z-index: 80;
           display: flex;
           flex-direction: column;
@@ -249,7 +277,7 @@ export function AccountMenu({
           flex-direction: column;
           gap: 0.2rem;
           padding-bottom: 0.65rem;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          border-bottom: 1px solid var(--border);
         }
         .account-full-name {
           font-size: 0.92rem;
@@ -269,7 +297,7 @@ export function AccountMenu({
           gap: 0.35rem;
           margin-top: 0.25rem;
           font-size: 0.74rem;
-          color: #34d399;
+          color: var(--success-ink);
         }
         .account-metrics {
           display: grid;
@@ -279,7 +307,7 @@ export function AccountMenu({
         .account-metrics > div {
           padding: 0.5rem 0.6rem;
           border-radius: 10px;
-          background: rgba(255, 255, 255, 0.04);
+          background: var(--surface-subtle);
           display: flex;
           flex-direction: column;
           gap: 0.1rem;
@@ -287,10 +315,45 @@ export function AccountMenu({
         .account-metrics strong {
           font-family: 'Space Grotesk', sans-serif;
           font-size: 1.05rem;
+          font-variant-numeric: tabular-nums;
         }
         .account-metrics span {
           font-size: 0.72rem;
           color: var(--muted);
+        }
+        .account-theme-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.5rem;
+          padding: 0.42rem 0.6rem;
+          border-radius: 10px;
+          background: var(--surface-subtle);
+          border: 1px solid var(--border);
+        }
+        .account-theme-row > span {
+          font-size: 0.76rem;
+          font-weight: 500;
+          color: var(--muted);
+        }
+        .account-theme-pills {
+          display: inline-flex;
+          gap: 0.25rem;
+        }
+        .account-theme-pills button {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.25rem;
+          padding: 0.24rem 0.5rem;
+          border-radius: 7px;
+          font-size: 0.72rem;
+          font-weight: 600;
+          color: var(--muted);
+          transition: background 0.15s, color 0.15s;
+        }
+        .account-theme-pills button.active {
+          background: var(--accent);
+          color: var(--accent-contrast);
         }
         .account-signout-btn {
           display: flex;
@@ -300,15 +363,15 @@ export function AccountMenu({
           width: 100%;
           padding: 0.55rem 0.85rem;
           border-radius: 10px;
-          background: rgba(248, 113, 113, 0.12);
-          border: 1px solid rgba(248, 113, 113, 0.28);
-          color: #fca5a5;
+          background: var(--danger-bg);
+          border: 1px solid var(--danger-border);
+          color: var(--danger-ink);
           font-size: 0.82rem;
           font-weight: 600;
-          transition: background 0.18s;
+          transition: filter 0.18s;
         }
         .account-signout-btn:hover {
-          background: rgba(248, 113, 113, 0.22);
+          filter: brightness(1.06);
         }
         @media (max-width: 640px) {
           .account-name {

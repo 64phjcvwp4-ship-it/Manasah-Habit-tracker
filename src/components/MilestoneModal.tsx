@@ -213,7 +213,7 @@ export function MilestoneModal({
           display: grid;
           place-items: center;
           padding: 1.5rem;
-          background: rgba(6, 0, 16, 0.72);
+          background: var(--backdrop-scrim);
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
           animation: milestoneFade 0.25s ease-out;
@@ -235,10 +235,11 @@ export function MilestoneModal({
           flex-direction: column;
           align-items: center;
           gap: 0.85rem;
-          border: 1px solid color-mix(in srgb, var(--milestone-accent) 40%, rgba(255,255,255,0.12));
+          background: var(--dropdown-bg);
+          border: 1px solid color-mix(in srgb, var(--milestone-accent) 40%, var(--border-strong));
           box-shadow:
-            0 24px 64px rgba(0, 0, 0, 0.65),
-            0 0 60px color-mix(in srgb, var(--milestone-accent) 24%, transparent);
+            var(--shadow-overlay),
+            0 0 60px color-mix(in srgb, var(--milestone-accent) 20%, transparent);
           animation: milestonePop 0.42s cubic-bezier(0.22, 1, 0.36, 1);
         }
         .milestone-close {
@@ -252,7 +253,7 @@ export function MilestoneModal({
         }
         .milestone-close:hover {
           color: var(--text);
-          background: rgba(255, 255, 255, 0.08);
+          background: var(--surface-hover);
         }
         .milestone-emblem {
           position: relative;
@@ -276,10 +277,10 @@ export function MilestoneModal({
           border-radius: 20px;
           display: grid;
           place-items: center;
-          background: linear-gradient(135deg, color-mix(in srgb, var(--milestone-accent) 30%, #1a122e), rgba(18, 15, 28, 0.95));
+          background: color-mix(in srgb, var(--milestone-accent) 18%, var(--surface-solid));
           border: 1px solid color-mix(in srgb, var(--milestone-accent) 55%, transparent);
           color: var(--milestone-accent);
-          box-shadow: 0 0 28px color-mix(in srgb, var(--milestone-accent) 35%, transparent);
+          box-shadow: 0 0 28px color-mix(in srgb, var(--milestone-accent) 28%, transparent);
         }
         .milestone-pill {
           display: inline-flex;

@@ -3,6 +3,59 @@ import { VALIDATION_LIMITS } from '../firebase'
 export const HABIT_CATEGORIES = ['Mindfulness', 'Focus', 'Fitness', 'Reflection', 'Other'] as const
 export type HabitCategory = (typeof HABIT_CATEGORIES)[number]
 
+export interface CategoryMeta {
+  name: HabitCategory
+  color: string
+  darkInk: string
+  lightInk: string
+  description: string
+}
+
+export const CATEGORY_META: Record<HabitCategory, CategoryMeta> = {
+  Mindfulness: {
+    name: 'Mindfulness',
+    color: '#8b5cf6',
+    darkInk: '#c4b5fd',
+    lightInk: '#5b21b6',
+    description: 'Calm, meditation & breathwork',
+  },
+  Focus: {
+    name: 'Focus',
+    color: '#10b981',
+    darkInk: '#6ee7b7',
+    lightInk: '#047857',
+    description: 'Deep work, study & reading',
+  },
+  Fitness: {
+    name: 'Fitness',
+    color: '#f59e0b',
+    darkInk: '#fcd34d',
+    lightInk: '#b45309',
+    description: 'Movement, training & health',
+  },
+  Reflection: {
+    name: 'Reflection',
+    color: '#ec4899',
+    darkInk: '#f9a8d4',
+    lightInk: '#be185d',
+    description: 'Journaling, gratitude & review',
+  },
+  Other: {
+    name: 'Other',
+    color: '#3b82f6',
+    darkInk: '#93c5fd',
+    lightInk: '#1d4ed8',
+    description: 'Routines & personal goals',
+  },
+}
+
+export function getCategoryMeta(category?: string): CategoryMeta {
+  if (category && category in CATEGORY_META) {
+    return CATEGORY_META[category as HabitCategory]
+  }
+  return CATEGORY_META.Other
+}
+
 export type Habit = {
   id: string
   name: string

@@ -12,7 +12,11 @@ import { GradualBlurFooter } from './components/GradualBlurFooter'
 import { MilestoneModal, type MilestoneEvent } from './components/MilestoneModal'
 import { ReminderToast } from './components/ReminderToast'
 import { AccountMenu } from './components/AccountMenu'
+import { SettingsMenu } from './components/SettingsMenu'
+import { PWAInstallButton } from './components/PWAInstallButton'
+import { OfflineIndicator } from './components/OfflineIndicator'
 import { useAuth } from './contexts/AuthContext'
+import { useTheme } from './contexts/ThemeContext'
 import { useHabits } from './hooks/useHabits'
 import { useHabitReminders } from './hooks/useHabitReminders'
 import { VALIDATION_LIMITS } from './firebase'
@@ -26,6 +30,7 @@ const STREAK_MILESTONES = new Set([3, 7, 14, 21, 30, 50, 66, 100, 365])
 
 export default function App() {
   const { user, authReady, signingIn, authError, clearAuthError, signInWithGoogle } = useAuth()
+  const { theme } = useTheme()
   const {
     habits,
     isCloudMode,
@@ -40,14 +45,6 @@ export default function App() {
     createHabit,
     deleteHabit,
   } = useHabits()
-
-  const {
-    permission: notificationPermission,
-    alerts: reminderAlerts,
-    requestPermission: requestNotificationPermission,
-    dismissAlert: dismissReminderAlert,
-    sendTestNotification,
-  } = useHabitReminders(habits)
 
   const [showAI, setShowAI] = useState(false)
   const [addingHabit, setAddingHabit] = useState(false)
@@ -74,6 +71,16 @@ export default function App() {
       setCelebration({ habit: updatedHabit, milestone: updatedHabit.streak })
     }
   }
+
+  const {
+    permission: notificationPermission,
+    alerts: reminderAlerts,
+    swReady,
+    backgroundSyncActive,
+    requestPermission: requestNotificationPermission,
+    dismissAlert: dismissReminderAlert,
+    sendTestNotification,
+  } = useHabitReminders(habits, handleToggleHabit)
 
   const handleSetHabitReminder = async (id: string, reminderTime: string) => {
     if (reminderTime && notificationPermission === 'default') {
@@ -128,6 +135,11 @@ export default function App() {
             <a href="#ai">Coach</a>
           </nav>
           <div className="nav-actions">
+            <PWAInstallButton />
+            <SettingsMenu
+              notificationPermission={notificationPermission}
+              onRequestNotifications={() => void requestNotificationPermission()}
+            />
             <AccountMenu
               habitCount={habits.length}
               totalStreak={totalStreak}
@@ -170,12 +182,16 @@ export default function App() {
               slabs={17}
               depth={0.75}
               elevation={60}
-              colors={['#2b1e4a', '#141418', '#0d0d10', '#08080b', '#050507']}
+              colors={
+                theme === 'light'
+                  ? ['#6d28d9', '#4c1d95', '#3b0764', '#2e1065', '#1e1b4b']
+                  : ['#2b1e4a', '#141418', '#0d0d10', '#08080b', '#050507']
+              }
               oilFinish="dark"
               density={1.65}
               reflectivity={1.65}
-              ambient={0.08}
-              exposure={0.85}
+              ambient={theme === 'light' ? 0.24 : 0.08}
+              exposure={theme === 'light' ? 0.95 : 0.85}
               logoScale={0.92}
               backgroundColor="transparent"
               height={180}
@@ -319,7 +335,11 @@ export default function App() {
                 <span className="reminders-sep" aria-hidden="true">·</span>
                 <span className="reminders-perm">
                   {notificationPermission === 'granted'
-                    ? 'Browser notifications enabled'
+                    ? backgroundSyncActive
+                      ? 'Background & Service Worker alerts active'
+                      : swReady
+                        ? 'Service Worker notifications active'
+                        : 'Browser notifications enabled'
                     : notificationPermission === 'denied'
                       ? 'Browser notifications blocked (in-app alerts active)'
                       : notificationPermission === 'unsupported'
@@ -409,6 +429,7 @@ export default function App() {
         }}
         onDismiss={dismissReminderAlert}
       />
+      <OfflineIndicator />
     </div>
   )
 }
